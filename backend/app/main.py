@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import cv, ingest, jobs
+from app.routers import cv, jobs
 
 settings = get_settings()
 
@@ -16,18 +16,17 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SmashApply API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SmashApply API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(jobs.router)
-app.include_router(ingest.router)
 app.include_router(cv.router)
 
 

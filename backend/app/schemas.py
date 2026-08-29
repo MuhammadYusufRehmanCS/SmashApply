@@ -9,49 +9,44 @@ class JobOut(BaseModel):
     id: int
     title: str
     company: str
-    raw_url: str
-    final_url: str | None
+    location: str
+    job_url: str
+    site: str
+    role_category: str
+    is_primary_role: bool
     description: str
-    match_score: float
-    status: str
-    validation_note: str | None
+    date_posted: str | None
+    tailored_keywords: str | None
+    tailored_at: datetime | None
     created_at: datetime
-    updated_at: datetime
 
 
-class MetricsOut(BaseModel):
-    smashed: int
-    passed: int
-    active_pipeline: int
-    total: int
+class ScrapeRequest(BaseModel):
+    primary_role: str = "Cloud Engineer"
+    location: str = "Remote"
 
 
-class SmashResponse(BaseModel):
-    job: JobOut
-    tailored_cv: str
-    apply_url: str
-
-
-class IngestResult(BaseModel):
-    fetched: int
+class ScrapeResult(BaseModel):
+    primary_role: str
+    location: str
+    roles_queried: list[str]
+    total_found: int
     created: int
     skipped: int
-    errors: list[str] = []
+    site_errors: list[str] = []
 
 
-class RevalidateResult(BaseModel):
-    checked: int
-    expired: int
+class TailorResult(BaseModel):
+    job_id: int
+    keywords: list[str]
+    tailored_cv: str
 
 
-class CVIn(BaseModel):
-    raw_text: str
-
-
-class CVOut(BaseModel):
+class MasterCVOut(BaseModel):
     id: int
+    filename: str
     raw_text: str
+    sections: list[dict]
+    layout: dict
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

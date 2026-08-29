@@ -1,4 +1,4 @@
-import type { Job, Metrics, SmashResponse } from "@/types/job";
+import type { Job, MasterCv, ScrapeResult, TailorResult } from "@/types/job";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
@@ -16,36 +16,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listJobs: (status?: string) =>
-    request<Job[]>(`/api/jobs${status ? `?status=${status}` : ""}`),
-  getMetrics: () => request<Metrics>("/api/jobs/metrics"),
-  passJob: (id: number) => request<Job>(`/api/jobs/${id}/pass`, { method: "POST" }),
-  smashJob: (id: number) => request<SmashResponse>(`/api/jobs/${id}/smash`, { method: "POST" }),
-  ingestGmail: () => request<{ fetched: number; created: number; skipped: number }>(
-    "/api/ingest/gmail",
-    { method: "POST" }
-  ),
-  revalidate: () => request<{ checked: number; expired: number }>(
-    "/api/ingest/revalidate",
-    { method: "POST" }
-  ),
-  getCv: () => request<{ id: number; raw_text: string } | null>("/api/cv"),
-  uploadCv: (raw_text: string) =>
-    request<{ id: number; raw_text: string }>("/api/cv", {
+  getMasterCv: () => request<MasterCv | null>("/api/cv"),
+
+  listJobs: () => request<Job[]>("/api/jobs"),
+
+  scrapeJobs: (primary_role: string, location: string) =>
+    request<ScrapeResult>("/api/jobs/scrape", {
       method: "POST",
-      body: JSON.stringify({ raw_text }),
+      body: JSON.stringify({ primary_role, location }),
     }),
-  uploadCvFile: async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch(`${API_BASE_URL}/api/cv/upload`, {
-      method: "POST",
-      body: formData,
-    });
+
+  tailorJob: (id: number) => request<TailorResult>(`/api/jobs/${id}/tailor`, { method: "POST" }),
+
+  downloadCv: async (id: number): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`${API_BASE_URL}/api/jobs/${id}/download-cv`);
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`${res.status} ${res.statusText}: ${body}`);
     }
-    return res.json() as Promise<{ id: number; raw_text: string }>;
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match?.[1] ?? `CV_${id}.pdf`;
+    const blob = await res.blob();
+    return { blob, filename };
   },
 };

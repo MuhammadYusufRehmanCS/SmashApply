@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SmashApply",
-  description: "Smash or Pass your job pipeline.",
+  description: "Live Cloud/DevOps job scraping with local Ollama CV tailoring.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
