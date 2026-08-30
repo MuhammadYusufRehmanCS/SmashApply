@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +11,7 @@ from app.database import get_db
 from app.models import Job, MasterCV
 from app.roles import ALIGNED_ROLES, PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
-from app.services.cv_tailor import tailor_cv
+from app.services.cv_tailor import compute_match_score, tailor_cv
 from app.services.job_scraper import scrape_for_roles
 from app.services.pdf_generator import build_ats_pdf
 
@@ -87,12 +88,18 @@ def get_job(job_id: int, db: Session = Depends(get_db)):
     return job
 
 
+class MasterCvUnavailableError(Exception):
+    """Raised when tailoring is attempted but there's no usable Master CV on
+    record. This app never writes the uploaded PDF's bytes to disk -- upload
+    parses it into raw_text/sections_json/layout_json and stores only that in
+    the MasterCV row -- so "the file is missing" here means either no MasterCV
+    row exists yet, or its raw_text is empty. Handled globally in main.py."""
+
+
 def _get_master_cv_or_400(db: Session) -> MasterCV:
     cv = db.execute(select(MasterCV).order_by(MasterCV.id.desc())).scalars().first()
-    if not cv:
-        raise HTTPException(
-            status_code=400, detail="No master CV uploaded yet. Upload one via /api/cv/upload first."
-        )
+    if not cv or not (cv.raw_text or "").strip():
+        raise MasterCvUnavailableError()
     return cv
 
 
@@ -101,14 +108,27 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], s
         keywords, tailored_text = await tailor_cv(
             cv.raw_text, job.title, job.company, job.description or job.title
         )
+        job.tailored_cv = tailored_text
+        job.tailored_keywords = ", ".join(keywords)
+        job.tailored_at = datetime.now(timezone.utc)
+        job.match_score = compute_match_score(keywords, tailored_text)
+        db.commit()
+        db.refresh(job)
     except RuntimeError as exc:
+        # tailor_cv's own connectivity error (Ollama unreachable / model not
+        # pulled) -- already has a clear, specific message, so surface it as-is.
+        logging.exception("Tailoring failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        # Anything else (a parsing bug, a bad DB write, ...) would otherwise
+        # propagate as an unhandled crash, which browsers surface as a bare
+        # "TypeError: Failed to fetch" instead of a real error message.
+        logging.exception("Tailoring failed")
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail="Tailoring failed due to an internal error. Please try again."
+        ) from exc
 
-    job.tailored_cv = tailored_text
-    job.tailored_keywords = ", ".join(keywords)
-    job.tailored_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(job)
     return keywords, tailored_text
 
 
@@ -122,6 +142,18 @@ async def tailor_job(job_id: int, db: Session = Depends(get_db)):
     keywords, tailored_text = await _run_tailor(job, cv, db)
 
     return TailorResult(job_id=job.id, keywords=keywords, tailored_cv=tailored_text)
+
+
+@router.patch("/{job_id}/toggle-applied", response_model=JobOut)
+def toggle_applied(job_id: int, db: Session = Depends(get_db)):
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job.applied = not job.applied
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 @router.get("/{job_id}/download-cv")

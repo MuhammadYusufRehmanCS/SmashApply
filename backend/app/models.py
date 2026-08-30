@@ -51,5 +51,8 @@ class Job(Base):
     tailored_cv: Mapped[str | None] = mapped_column(Text, nullable=True)
     tailored_keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
     tailored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    match_score: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+
+    applied: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

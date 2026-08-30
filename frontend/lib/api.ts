@@ -28,6 +28,8 @@ export const api = {
 
   tailorJob: (id: number) => request<TailorResult>(`/api/jobs/${id}/tailor`, { method: "POST" }),
 
+  toggleApplied: (id: number) => request<Job>(`/api/jobs/${id}/toggle-applied`, { method: "PATCH" }),
+
   downloadCv: async (id: number): Promise<{ blob: Blob; filename: string }> => {
     const res = await fetch(`${API_BASE_URL}/api/jobs/${id}/download-cv`);
     if (!res.ok) {

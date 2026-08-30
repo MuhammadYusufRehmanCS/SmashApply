@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FileText, Loader2, Search, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Circle, Download, FileText, Loader2, Search, Target, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,12 @@ function saveBlob(blob: Blob, filename: string) {
 
 const JOBS_LOAD_TIMEOUT_MS = 5000;
 
+function matchScoreBadgeClasses(score: number): string {
+  if (score >= 75) return "border-transparent bg-smash text-smash-foreground";
+  if (score >= 50) return "border-transparent bg-amber-500 text-white";
+  return "border-transparent bg-pass text-pass-foreground";
+}
+
 export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +44,15 @@ export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [actioningId, setActioningId] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const totalApplied = useMemo(() => jobs.filter((job) => job.applied).length, [jobs]);
+  const averageMatchScore = useMemo(() => {
+    const scored = jobs.filter((job) => job.match_score !== null) as (Job & { match_score: number })[];
+    if (scored.length === 0) return null;
+    return Math.round(scored.reduce((sum, job) => sum + job.match_score, 0) / scored.length);
+  }, [jobs]);
 
   const refreshJobs = useCallback(async () => {
     const data = await api.listJobs();
@@ -137,6 +151,19 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleToggleApplied(job: Job) {
+    setTogglingId(job.id);
+    setActionError(null);
+    try {
+      const updated = await api.toggleApplied(job.id);
+      setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       {/* Top bar */}
@@ -218,6 +245,34 @@ export default function DashboardPage() {
         {scrapeStatus && <p className="px-4 pb-4 text-xs text-muted-foreground">{scrapeStatus}</p>}
       </Card>
 
+      {/* Stat bar */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:max-w-md sm:grid-cols-2">
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-smash/15 text-smash">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total applied</p>
+              <p className="text-2xl font-semibold">{totalApplied}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Target className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Average tailored score</p>
+              <p className="text-2xl font-semibold">
+                {averageMatchScore !== null ? `${averageMatchScore}%` : "—"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {actionError && (
         <div className="mb-4 rounded-md border border-pass bg-pass/10 p-3 text-sm text-pass">{actionError}</div>
       )}
@@ -245,6 +300,8 @@ export default function DashboardPage() {
                     <th className="py-2 pr-3">Aligned Role Category</th>
                     <th className="py-2 pr-3">Location</th>
                     <th className="py-2 pr-3">Source</th>
+                    <th className="py-2 pr-3">Match Score</th>
+                    <th className="py-2 pr-3">Applied</th>
                     <th className="py-2 pr-3" />
                   </tr>
                 </thead>
@@ -267,6 +324,32 @@ export default function DashboardPage() {
                       </td>
                       <td className="py-3 pr-3">{job.location}</td>
                       <td className="py-3 pr-3 text-xs text-muted-foreground">{job.site}</td>
+                      <td className="py-3 pr-3">
+                        {job.match_score !== null ? (
+                          <Badge className={matchScoreBadgeClasses(job.match_score)}>
+                            {job.match_score}% Match
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not tailored</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <Button
+                          size="sm"
+                          variant={job.applied ? "smash" : "outline"}
+                          onClick={() => handleToggleApplied(job)}
+                          disabled={togglingId === job.id}
+                        >
+                          {togglingId === job.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : job.applied ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : (
+                            <Circle className="h-4 w-4" />
+                          )}
+                          {job.applied ? "Applied" : "Mark as Applied"}
+                        </Button>
+                      </td>
                       <td className="py-3 pr-3">
                         <Button
                           size="sm"

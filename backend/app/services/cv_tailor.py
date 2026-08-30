@@ -235,6 +235,30 @@ def _sanitize_tailored_text(text: str) -> str:
     return cleaned.strip()
 
 
+def _keyword_present(keyword: str, tailored_text_lower: str) -> bool:
+    """Whole-word match for plain-text keywords (so "Go" doesn't match inside
+    "Google"), falling back to a plain substring check for keywords containing
+    punctuation a word-boundary regex can't handle (e.g. "CI/CD", "Node.js")."""
+    keyword_lower = keyword.strip().lower()
+    if not keyword_lower:
+        return False
+    if re.fullmatch(r"[\w\s\-\+#]+", keyword_lower):
+        return re.search(rf"\b{re.escape(keyword_lower)}\b", tailored_text_lower) is not None
+    return keyword_lower in tailored_text_lower
+
+
+def compute_match_score(keywords: list[str], tailored_text: str) -> int | None:
+    """Returns 0-100: the percentage of the JD's extracted technical keywords
+    that show up in the tailored CV -- a simple, deterministic proxy for how
+    well the tailoring pass actually worked the target job's terms into the
+    resume. Returns None when there are no keywords to score against."""
+    if not keywords:
+        return None
+    tailored_text_lower = tailored_text.lower()
+    matched = sum(1 for kw in keywords if _keyword_present(kw, tailored_text_lower))
+    return round(100 * matched / len(keywords))
+
+
 _KEYWORDS_LINE_RE = re.compile(r"(?im)^\s*keywords\s*:\s*(.+)$")
 # Looser fallback anchor for when the model doesn't hit the exact "KEYWORDS:
 # ...\n---TAILORED CV---\n" format (small local models drift on this despite
