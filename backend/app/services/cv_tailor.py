@@ -194,6 +194,28 @@ def _strip_inline_meta_commentary(line: str) -> str:
         line = stripped_line
 
 
+# The system prompt requires every bullet to use a leading "-" (and
+# explicitly says to convert any other bullet glyph like "•" to it), but
+# smaller local models don't always comply -- and separately, Ollama
+# occasionally emits U+FFFD (the Unicode replacement character) in place of
+# the bullet glyph entirely, a tokenizer artifact since nothing in this
+# pipeline itself performs a lossy decode (the bytes are already corrupted
+# by the time httpx reads the response). Both cases are unambiguously "this
+# line is a bullet using the wrong marker" -- normalize them to a clean "-"
+# before the text reaches ReportLab or the API, rather than leaving a stray
+# glyph (or a literal replacement-character box) in the resume/PDF/preview.
+# "*" is deliberately excluded: a line can legitimately start with "**" for
+# bold markdown (e.g. a bolded Technical Expertise category label), and
+# treating that as a bullet marker would eat the opening ** and break the
+# bold span instead of just fixing a bullet.
+_NON_DASH_BULLET_CHARS = "•◦▪●‣·�"
+_LEADING_BULLET_RE = re.compile(rf"^(\s*)[{_NON_DASH_BULLET_CHARS}]+\s*")
+
+
+def _normalize_bullet_marker(line: str) -> str:
+    return _LEADING_BULLET_RE.sub(r"\1- ", line)
+
+
 def _dedupe_bullets(lines: list[str]) -> list[str]:
     """Drops a bullet line if its normalized text exactly duplicates an
     earlier bullet anywhere in the document. Small local models occasionally
@@ -217,6 +239,7 @@ def _sanitize_tailored_text(text: str) -> str:
     ReportLab."""
     lines = []
     for line in text.splitlines():
+        line = _normalize_bullet_marker(line)
         stripped = line.strip()
         if not stripped:
             lines.append(line)

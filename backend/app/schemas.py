@@ -18,6 +18,7 @@ class JobOut(BaseModel):
     date_posted: str | None
     tailored_keywords: str | None
     tailored_at: datetime | None
+    tailored_cv: str | None
     match_score: int | None
     applied: bool
     created_at: datetime

@@ -11,6 +11,7 @@ export interface Job {
   date_posted: string | null;
   tailored_keywords: string | null;
   tailored_at: string | null;
+  tailored_cv: string | null;
   match_score: number | null;
   applied: boolean;
   created_at: string;
