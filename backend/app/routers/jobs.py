@@ -16,6 +16,9 @@ from app.services.pdf_generator import build_ats_pdf
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
+# Default initials prefix for generated CV filenames (e.g. "MYR_Google.pdf").
+DEFAULT_USER_INITIALS = "MYR"
+
 
 @router.get("", response_model=list[JobOut])
 def list_jobs(db: Session = Depends(get_db)):
@@ -95,7 +98,9 @@ def _get_master_cv_or_400(db: Session) -> MasterCV:
 
 async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], str]:
     try:
-        keywords, tailored_text = await tailor_cv(cv.raw_text, job.description or job.title)
+        keywords, tailored_text = await tailor_cv(
+            cv.raw_text, job.title, job.company, job.description or job.title
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -132,12 +137,15 @@ async def download_cv(job_id: int, db: Session = Depends(get_db)):
     layout = json.loads(cv.layout_json)
     pdf_bytes = build_ats_pdf(job.tailored_cv, layout)
 
-    safe = "".join(c for c in f"{job.company}_{job.title}" if c.isalnum() or c in (" ", "-", "_"))
-    safe = safe.strip().replace(" ", "_")[:80] or "tailored_cv"
-    filename = f"CV_{safe}.pdf".encode("ascii", "ignore").decode("ascii") or "tailored_cv.pdf"
+    # Dynamically fetch and clean this job's company name so every download is
+    # named for its target company (e.g. MYR_Google.pdf, MYR_Amazon.pdf) instead
+    # of a generic filename.
+    clean_company_name = "".join(c for c in (job.company or "") if c.isalnum() or c in (" ", "-", "_"))
+    clean_company_name = clean_company_name.strip().replace(" ", "_")[:80] or "Company"
+    clean_company_name = clean_company_name.encode("ascii", "ignore").decode("ascii") or "Company"
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename={DEFAULT_USER_INITIALS}_{clean_company_name}.pdf"},
     )

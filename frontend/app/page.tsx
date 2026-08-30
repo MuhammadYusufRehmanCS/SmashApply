@@ -161,7 +161,7 @@ export default function DashboardPage() {
                 type="file"
                 accept=".pdf"
                 onChange={handleFileChange}
-                className="min-w-0 flex-1 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs"
+                className="min-w-0 flex-1 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-blue-600 file:px-2 file:py-1 file:text-xs file:text-white file:hover:bg-blue-500"
               />
               <Button size="sm" variant="outline" onClick={handleUpload} disabled={uploading || !selectedFile}>
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}

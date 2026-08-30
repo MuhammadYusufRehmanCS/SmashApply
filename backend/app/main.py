@@ -24,6 +24,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Content-Disposition isn't in the browser's default CORS-safelisted response
+    # headers, so without this the frontend's fetch() can't read the dynamic
+    # filename and silently falls back to a generic name.
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(jobs.router)
