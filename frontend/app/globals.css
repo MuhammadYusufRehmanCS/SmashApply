@@ -3,14 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --background: 240 10% 6%;
-  --foreground: 0 0% 96%;
-  --card: 240 8% 10%;
-  --card-foreground: 0 0% 96%;
-  --border: 240 6% 20%;
-  --muted: 240 6% 16%;
+  /* #0D0E11 -- Linear's near-black workspace background */
+  --background: 225 14% 6%;
+  --foreground: 240 9% 96%;
+  --card: 228 12% 8%;
+  --card-foreground: 240 9% 96%;
+  /* zinc-800 */
+  --border: 240 4% 16%;
+  --muted: 240 4% 16%;
   --muted-foreground: 240 5% 65%;
-  --primary: 262 83% 62%;
+  /* Linear's brand indigo, #5E6AD2 */
+  --primary: 234 56% 60%;
   --primary-foreground: 0 0% 100%;
   --smash: 142 71% 45%;
   --smash-foreground: 0 0% 100%;

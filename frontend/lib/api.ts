@@ -18,6 +18,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getMasterCv: () => request<MasterCv | null>("/api/cv"),
 
+  uploadCv: async (file: File): Promise<MasterCv> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // Can't go through request() -- it forces a JSON Content-Type header,
+    // which breaks the multipart/form-data boundary the browser sets for us.
+    const res = await fetch(`${API_BASE_URL}/api/cv/upload`, { method: "POST", body: formData, cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    }
+    return res.json() as Promise<MasterCv>;
+  },
+
   listJobs: () => request<Job[]>("/api/jobs"),
 
   scrapeJobs: (primary_role: string, location: string) =>
