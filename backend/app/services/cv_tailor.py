@@ -298,14 +298,9 @@ async def tailor_cv(
         "prompt": prompt,
         "stream": False,
         "options": {
-            # Full resumes plus a job description can run long -- don't let a
-            # short default context or generation cap truncate the output.
-            "num_predict": -1,
-            "num_ctx": 8192,
-            # Lower than the model's default (~0.8) -- this task wants literal
-            # rewording that hews to strict structural constraints (exact
-            # bullet counts, no invented clauses), not creative embellishment.
-            "temperature": 0.3,
+            "temperature": 0.2,
+            "num_ctx": 4096,
+            "num_predict": 1024,
         },
     }
 

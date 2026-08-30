@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # Local LLM (Ollama)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
+    ollama_model: str = "llama3.2:3b"
 
     # Database
     database_url: str = "sqlite:///./data/smashapply.db"
