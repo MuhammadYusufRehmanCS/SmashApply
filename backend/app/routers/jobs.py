@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models import Job, MasterCV
 from app.roles import ALIGNED_ROLES, PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
-from app.services.cv_tailor import TailoringError, compute_match_score, tailor_cv
+from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv
 from app.services.job_scraper import scrape_for_roles
 from app.services.pdf_generator import build_ats_pdf
 
@@ -103,27 +103,49 @@ def _get_master_cv_or_400(db: Session) -> MasterCV:
     return cv
 
 
-async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], str]:
+def _has_cached_tailoring(job: Job) -> bool:
+    return bool((job.tailored_cv or "").strip() and (job.tailored_keywords or "").strip())
+
+
+async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bool = False) -> TailorCVResult:
     try:
-        keywords, tailored_text = await tailor_cv(
-            cv, job.title, job.company, job.description or job.title
+        result = await tailor_cv(
+            cv,
+            job.title,
+            job.company,
+            job.description or job.title,
+            allow_fallback=allow_fallback,
         )
-        job.tailored_cv = tailored_text
-        job.tailored_keywords = ", ".join(keywords)
-        job.tailored_at = datetime.now(timezone.utc)
-        job.match_score = compute_match_score(keywords, tailored_text)
-        db.commit()
-        db.refresh(job)
+        if result.cacheable:
+            job.tailored_cv = result.text
+            job.tailored_keywords = ", ".join(result.keywords)
+            job.tailored_at = datetime.now(timezone.utc)
+            job.match_score = compute_match_score(result.keywords, result.text)
+            db.commit()
+            db.refresh(job)
+        elif not _has_cached_tailoring(job):
+            # Do not let a fallback Master CV get cached as if it were a
+            # tailored result. This also clears fallback rows written by older
+            # versions where tailored_cv was populated but tailored_keywords
+            # stayed blank.
+            job.tailored_cv = None
+            job.tailored_keywords = None
+            job.tailored_at = None
+            job.match_score = None
+            db.commit()
+            db.refresh(job)
     except TailoringError as exc:
-        # Ollama unreachable, returned invalid/empty JSON, or its response
-        # failed shape/structural validation -- tailor_cv() never returns a
-        # partially-usable result in these cases, so there is nothing here to
-        # fall back to rendering (never the job description, never a raw or
-        # corrupted generation). Log the real cause for debugging, but return
-        # a clean, generic failure to the client.
+        # Non-recoverable local CV issues still surface here. Ollama failures,
+        # malformed JSON, timeouts, and strict validation misses are retried
+        # inside tailor_cv(); callers decide whether retry exhaustion should
+        # fail the tailor action or render a clean Master CV fallback for PDF
+        # download.
         logging.exception("Tailoring failed")
         db.rollback()
-        raise HTTPException(status_code=500, detail="CV Tailoring failed. Please retry.") from exc
+        raise HTTPException(
+            status_code=502,
+            detail="CV Tailoring failed after retry. No fallback was cached; check backend logs and retry.",
+        ) from exc
     except Exception as exc:
         # Anything else (a bug in our own reconstruction code, a bad DB
         # write, ...) would otherwise propagate as an unhandled crash, which
@@ -133,7 +155,7 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], s
         db.rollback()
         raise HTTPException(status_code=500, detail="CV Tailoring failed. Please retry.") from exc
 
-    return keywords, tailored_text
+    return result
 
 
 @router.post("/{job_id}/tailor", response_model=TailorResult)
@@ -143,9 +165,9 @@ async def tailor_job(job_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
 
     cv = _get_master_cv_or_400(db)
-    keywords, tailored_text = await _run_tailor(job, cv, db)
+    result = await _run_tailor(job, cv, db)
 
-    return TailorResult(job_id=job.id, keywords=keywords, tailored_cv=tailored_text)
+    return TailorResult(job_id=job.id, keywords=result.keywords, tailored_cv=result.text)
 
 
 @router.patch("/{job_id}/toggle-applied", response_model=JobOut)
@@ -167,11 +189,13 @@ async def download_cv(job_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
 
     cv = _get_master_cv_or_400(db)
-    if not job.tailored_cv:
-        await _run_tailor(job, cv, db)
+    cv_text = job.tailored_cv
+    if not _has_cached_tailoring(job):
+        result = await _run_tailor(job, cv, db, allow_fallback=True)
+        cv_text = result.text
 
     layout = json.loads(cv.layout_json)
-    pdf_bytes = build_ats_pdf(job.tailored_cv, layout)
+    pdf_bytes = build_ats_pdf(cv_text or cv.raw_text, layout)
 
     # Dynamically fetch and clean this job's company name so every download is
     # named for its target company (e.g. MYR_Google.pdf, MYR_Amazon.pdf) instead

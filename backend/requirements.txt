@@ -4,6 +4,7 @@ sqlalchemy==2.0.36
 pydantic==2.10.4
 pydantic-settings==2.7.1
 httpx==0.28.1
+openai==3.6.0
 python-dotenv==1.0.1
 python-multipart==0.0.20
 pypdf==5.1.0

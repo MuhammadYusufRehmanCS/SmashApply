@@ -28,7 +28,7 @@ SECTION_KEYWORDS = {
     "summary of qualifications",
 }
 
-BULLET_PREFIXES = ("-", "*", "•", "◦", "▪", "●", "‣", "·")
+BULLET_PREFIXES = ("-", "*", "•", "◦", "▪", "●", "‣", "·", "\ufffd")
 
 
 def looks_like_heading(line: str) -> bool:
