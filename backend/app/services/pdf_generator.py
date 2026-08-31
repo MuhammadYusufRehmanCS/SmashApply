@@ -23,7 +23,7 @@ from reportlab.platypus import (
 )
 from pypdf import PdfReader
 
-from app.services.text_sections import is_bullet_line, segment_sections, strip_bullet
+from app.services.text_sections import is_bullet_line, looks_like_entry_header, segment_sections, strip_bullet
 
 # Lower bound for the shrink-to-fit scale loop in build_ats_pdf -- below this,
 # text becomes illegibly small, so we stop shrinking and accept the overflow.
@@ -45,6 +45,10 @@ BULLET_SPACE_AFTER_PT = 2.0
 DEFAULT_TEXT_COLOR_HEX = "#1a1a1a"
 DEFAULT_RULE_COLOR_HEX = "#a0a0a0"
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+# "1/1", "1 / 2", "Page 1 of 2", etc. -- a page-number footer line, not part
+# of the candidate's contact info. See _header_flowables.
+_PAGE_NUMBER_RE = re.compile(r"^(page\s+)?\d+\s*(/|of)\s*\d+$", re.IGNORECASE)
 
 
 def _layout_color(layout: dict, key: str, fallback: str) -> str:
@@ -215,13 +219,6 @@ def _build_styles(layout: dict, scale: float = 1.0) -> dict:
     }
 
 
-def _looks_like_subheading(line: str) -> bool:
-    stripped = line.strip()
-    if not stripped or len(stripped) > 100:
-        return False
-    return bool(any(ch.isdigit() for ch in stripped) or " - " in stripped or " | " in stripped or "|" in stripped)
-
-
 def _section_flowables(section: dict, styles: dict, scale: float = 1.0, include_heading: bool = True) -> list:
     flowables: list = []
     if include_heading:
@@ -248,7 +245,7 @@ def _section_flowables(section: dict, styles: dict, scale: float = 1.0, include_
             flowables.append(Paragraph(f"•  {_esc_with_markup(strip_bullet(line))}", styles["bullet"]))
             prev_was_subheading = False
             continue
-        if _looks_like_subheading(line):
+        if looks_like_entry_header(line):
             flowables.append(Paragraph(_esc_with_markup(line.strip()), styles["subheading"]))
             prev_was_subheading = True
             continue
@@ -275,6 +272,12 @@ def _header_flowables(
     if not header_section or not header_section["content"].strip():
         return []
     lines = [ln.strip() for ln in header_section["content"].splitlines() if ln.strip()]
+    # pypdf's text extraction pulls the page-number footer ("1/1", "Page 1 of
+    # 2", ...) into the same text stream as everything else on the page, and
+    # since it appears before the first detected section heading it lands in
+    # this "Header" block alongside the name/contact line. It's not part of
+    # the contact info -- drop it rather than pipe-joining it in.
+    lines = [ln for ln in lines if not _PAGE_NUMBER_RE.match(ln)]
     if not lines:
         return []
 

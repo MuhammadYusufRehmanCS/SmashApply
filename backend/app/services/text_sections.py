@@ -2,6 +2,7 @@
 ATS PDF generator, so a tailored CV can be re-segmented into the same section
 order that was detected on the original upload.
 """
+import re
 
 SECTION_KEYWORDS = {
     "summary",
@@ -41,6 +42,36 @@ def looks_like_heading(line: str) -> bool:
     if len(letters) >= 3 and stripped == stripped.upper() and not stripped.startswith(BULLET_PREFIXES):
         return True
     return False
+
+
+# A real date RANGE (a 4-digit year followed by a dash/"to" and either
+# another year or "present"/"current"), not just any digit -- a bullet like
+# "reduced deployment time by 60%" or "managed 40+ AWS accounts" contains
+# digits too, and must NOT be mistaken for a job-entry boundary.
+_DATE_RANGE_RE = re.compile(r"(19|20)\d{2}\s*(?:[-–—]|to)\s*((19|20)\d{2}|present|current)", re.IGNORECASE)
+
+
+def looks_like_entry_header(line: str) -> bool:
+    """True for a "Title | Company | Location | Dates"-shaped line -- the
+    boundary between one job entry and the next in a Professional Experience
+    section. Used both by the PDF generator (to render it as a subheading)
+    and by the tailoring pipeline (to split the section into per-employer
+    entries whose company/dates/title get passed through untouched rather
+    than ever being sent to the LLM) -- so this has to be precise, not just
+    "looks header-ish": a false positive in the tailoring pipeline means a
+    bullet gets silently treated as an immutable header instead of being
+    sent for tailoring, or a bullet's own text gets used as if it were a
+    company/dates line."""
+    stripped = line.strip()
+    if not stripped or len(stripped) > 100:
+        return False
+    if stripped.startswith(BULLET_PREFIXES):
+        return False
+    # Pipe-delimited "Title | Company | Location | Dates" is the dominant
+    # convention this targets -- a strong, specific signal on its own.
+    if " | " in stripped or stripped.count("|") >= 2:
+        return True
+    return bool(_DATE_RANGE_RE.search(stripped))
 
 
 def is_bullet_line(line: str) -> bool:

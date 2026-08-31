@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models import Job, MasterCV
 from app.roles import ALIGNED_ROLES, PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
-from app.services.cv_tailor import compute_match_score, tailor_cv
+from app.services.cv_tailor import TailoringError, compute_match_score, tailor_cv
 from app.services.job_scraper import scrape_for_roles
 from app.services.pdf_generator import build_ats_pdf
 
@@ -106,7 +106,7 @@ def _get_master_cv_or_400(db: Session) -> MasterCV:
 async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], str]:
     try:
         keywords, tailored_text = await tailor_cv(
-            cv.raw_text, job.title, job.company, job.description or job.title
+            cv, job.title, job.company, job.description or job.title
         )
         job.tailored_cv = tailored_text
         job.tailored_keywords = ", ".join(keywords)
@@ -114,20 +114,24 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session) -> tuple[list[str], s
         job.match_score = compute_match_score(keywords, tailored_text)
         db.commit()
         db.refresh(job)
-    except RuntimeError as exc:
-        # tailor_cv's own connectivity error (Ollama unreachable / model not
-        # pulled) -- already has a clear, specific message, so surface it as-is.
-        logging.exception("Tailoring failed")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except Exception as exc:
-        # Anything else (a parsing bug, a bad DB write, ...) would otherwise
-        # propagate as an unhandled crash, which browsers surface as a bare
-        # "TypeError: Failed to fetch" instead of a real error message.
+    except TailoringError as exc:
+        # Ollama unreachable, returned invalid/empty JSON, or its response
+        # failed shape/structural validation -- tailor_cv() never returns a
+        # partially-usable result in these cases, so there is nothing here to
+        # fall back to rendering (never the job description, never a raw or
+        # corrupted generation). Log the real cause for debugging, but return
+        # a clean, generic failure to the client.
         logging.exception("Tailoring failed")
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail="Tailoring failed due to an internal error. Please try again."
-        ) from exc
+        raise HTTPException(status_code=500, detail="CV Tailoring failed. Please retry.") from exc
+    except Exception as exc:
+        # Anything else (a bug in our own reconstruction code, a bad DB
+        # write, ...) would otherwise propagate as an unhandled crash, which
+        # browsers surface as a bare "TypeError: Failed to fetch" instead of
+        # a real error message.
+        logging.exception("Tailoring failed")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="CV Tailoring failed. Please retry.") from exc
 
     return keywords, tailored_text
 
