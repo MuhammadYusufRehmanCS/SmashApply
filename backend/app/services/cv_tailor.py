@@ -266,8 +266,8 @@ Professional Experience still read substantially like the originals, your output
 supported by the Master CV. Use exact JD terminology aggressively when it fits those verified
 workstreams, even if the Master CV used broader or older wording.
 - Invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
-certifications, metrics, business domains, projects, responsibilities, regulated environments, or
-specialty tools unless the given Master CV facts support them. When a JD requirement is absent,
+certifications, metrics, business domains, projects, responsibilities, regulated environments, and add
+specialty. When a JD requirement is absent,
 emphasize the closest experience claiming it directly.
 - Do NOT mention total years of experience anywhere in generated resume text. Phrases like
 "8 years of experience", "8+ years experience", "over 8 years", or "8-year background" are

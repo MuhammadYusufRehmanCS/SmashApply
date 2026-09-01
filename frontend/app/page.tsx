@@ -159,59 +159,98 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[#0D0E11] text-zinc-100">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 px-4">
-        <span className="font-semibold tracking-tight text-zinc-100">SmashApply</span>
-        <div className="h-5 w-px bg-zinc-800" />
+    <div className="flex h-screen flex-col overflow-hidden bg-[#08090B] text-zinc-100">
+      <header className="shrink-0 border-b border-white/10 bg-[#0C0D10]/95 px-4 shadow-[0_1px_0_rgba(255,255,255,0.03)]">
+        <div className="flex min-h-16 items-center gap-4">
+          <div className="flex min-w-[184px] items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-emerald-400/35 bg-[#101417] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+            >
+              <span className="absolute -left-2 top-3 h-[2px] w-14 -rotate-12 bg-emerald-400/80" />
+              <span className="relative text-[13px] font-black tracking-tight text-white">SA</span>
+            </span>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold leading-none tracking-tight">
+                <span className="text-zinc-100">Smash</span>
+                <span className="text-emerald-300"> Apply</span>
+              </p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+                Job search cockpit
+              </p>
+            </div>
+          </div>
 
-        <input
-          value={primaryRole}
-          onChange={(e) => setPrimaryRole(e.target.value)}
-          placeholder="Job title"
-          className="h-8 w-56 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-        <input
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="Location"
-          className="h-8 w-32 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        />
-        <button
-          type="button"
-          onClick={handleScrape}
-          disabled={scraping}
-          className="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md bg-indigo-500 px-3 text-xs font-medium text-white transition-colors hover:bg-indigo-400 disabled:opacity-50"
-        >
-          {scraping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-          Scrape
-        </button>
+          <div className="hidden h-8 w-px bg-white/10 md:block" />
 
-        <div className="ml-auto flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            title={masterCv ? masterCv.filename : "Upload Master CV"}
-            className="flex h-8 items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-300 transition-colors hover:border-zinc-700 disabled:opacity-50"
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <FileText className="h-3.5 w-3.5" />
-            )}
-            <span className="max-w-[140px] truncate">{masterCv ? masterCv.filename : "Upload CV"}</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <label htmlFor="primary-role" className="sr-only">
+              Job title
+            </label>
+            <input
+              id="primary-role"
+              value={primaryRole}
+              onChange={(e) => setPrimaryRole(e.target.value)}
+              placeholder="Job title"
+              className="h-9 w-64 max-w-[36vw] rounded-md border border-white/10 bg-[#111318] px-3 text-xs font-medium text-zinc-200 placeholder:text-zinc-600 outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10"
+            />
+            <label htmlFor="job-location" className="sr-only">
+              Location
+            </label>
+            <input
+              id="job-location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Location"
+              className="h-9 w-36 rounded-md border border-white/10 bg-[#111318] px-3 text-xs font-medium text-zinc-200 placeholder:text-zinc-600 outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10"
+            />
+            <button
+              type="button"
+              onClick={handleScrape}
+              disabled={scraping}
+              className="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md bg-emerald-400 px-3 text-xs font-semibold text-zinc-950 shadow-[0_0_0_1px_rgba(255,255,255,0.12)_inset] transition-colors hover:bg-emerald-300 disabled:opacity-50"
+            >
+              {scraping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+              Find Jobs
+            </button>
+          </div>
 
-          <span className="font-mono text-xs text-zinc-500">
-            {totalApplied} Applied • {averageMatchScore !== null ? `${averageMatchScore}%` : "—"} Avg Match
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title={masterCv ? masterCv.filename : "Upload Master CV"}
+              className="flex h-9 items-center gap-1.5 rounded-md border border-white/10 bg-[#111318] px-2.5 text-xs font-medium text-zinc-300 transition-colors hover:border-emerald-400/35 hover:text-zinc-100 disabled:opacity-50"
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              <span className="max-w-[140px] truncate">{masterCv ? masterCv.filename : "Upload CV"}</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            <div className="hidden items-center gap-2 rounded-md border border-white/10 bg-[#111318] px-2.5 py-1.5 font-mono text-[11px] text-zinc-500 lg:flex">
+              <span>
+                <span className="text-zinc-200">{totalApplied}</span> applied
+              </span>
+              <span className="h-3 w-px bg-white/10" />
+              <span>
+                <span className="text-emerald-300">
+                  {averageMatchScore !== null ? `${averageMatchScore}%` : "--"}
+                </span>{" "}
+                avg match
+              </span>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -221,8 +260,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
-        <section className="w-[65%] min-w-0 overflow-y-auto border-r border-zinc-800">
+      <div className="flex min-h-0 flex-1 border-t border-white/[0.03]">
+        <section className="w-[65%] min-w-0 overflow-y-auto border-r border-white/10 bg-[#090A0D]">
           <JobTable
             jobs={jobs}
             loading={loadingJobs}
@@ -235,7 +274,7 @@ export default function DashboardPage() {
           />
         </section>
 
-        <aside className="flex w-[35%] min-w-0 flex-col overflow-hidden">
+        <aside className="flex w-[35%] min-w-0 flex-col overflow-hidden bg-[#0B0C0F]">
           <InspectorPanel
             job={selectedJob}
             tailoringId={tailoringId}

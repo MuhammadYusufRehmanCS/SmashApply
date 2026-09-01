@@ -30,13 +30,13 @@ export function JobTable({
   onQuickDownload,
 }: JobTableProps) {
   if (loading) {
-    return <p className="p-6 text-xs text-zinc-500">Loading jobs…</p>;
+    return <p className="p-6 text-xs text-zinc-500">Loading jobs...</p>;
   }
 
   if (jobs.length === 0) {
     return (
       <div className="p-6 text-xs text-zinc-500">
-        No jobs found. Scrape to fetch live postings.
+        No jobs found. Search to fill the board.
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function JobTable({
       <div
         className={cn(
           ROW_GRID,
-          "sticky top-0 z-10 border-b border-zinc-800 bg-[#0D0E11] px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500"
+          "sticky top-0 z-10 border-b border-white/10 bg-[#090A0D]/95 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 backdrop-blur"
         )}
       >
         <span>Company</span>
@@ -66,8 +66,8 @@ export function JobTable({
               onClick={() => onSelect(job)}
               className={cn(
                 ROW_GRID,
-                "cursor-pointer border-b border-zinc-900 border-l-2 px-3 py-2 text-sm transition-colors hover:bg-zinc-900/40",
-                selected ? "border-l-indigo-500 bg-zinc-900/60" : "border-l-transparent"
+                "cursor-pointer border-b border-white/[0.04] border-l-2 px-3 py-2 text-sm transition-colors hover:bg-white/[0.035]",
+                selected ? "border-l-emerald-400 bg-white/[0.055]" : "border-l-transparent"
               )}
             >
               <div className="min-w-0">
@@ -77,13 +77,13 @@ export function JobTable({
 
               <p className="truncate text-zinc-300">{job.title}</p>
 
-              <p className="truncate text-zinc-500">{job.location || "—"}</p>
+              <p className="truncate text-zinc-500">{job.location || "--"}</p>
 
               <div>
                 {job.match_score !== null ? (
                   <Pill tone={matchScoreTone(job.match_score)}>{job.match_score}%</Pill>
                 ) : (
-                  <Pill tone="zinc">—</Pill>
+                  <Pill tone="zinc">--</Pill>
                 )}
               </div>
 
@@ -96,7 +96,7 @@ export function JobTable({
                     onToggleApplied(job);
                   }}
                   disabled={togglingId === job.id}
-                  className="flex h-6 w-6 items-center justify-center rounded text-zinc-600 transition-colors hover:text-zinc-300 disabled:opacity-50"
+                  className="flex h-6 w-6 items-center justify-center rounded text-zinc-600 transition-colors hover:text-emerald-300 disabled:opacity-50"
                 >
                   {togglingId === job.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -117,7 +117,7 @@ export function JobTable({
                     onQuickDownload(job);
                   }}
                   disabled={actioningId === job.id}
-                  className="flex h-6 w-6 items-center justify-center rounded text-zinc-600 transition-colors hover:text-zinc-300 disabled:opacity-50"
+                  className="flex h-6 w-6 items-center justify-center rounded text-zinc-600 transition-colors hover:text-emerald-300 disabled:opacity-50"
                 >
                   {actioningId === job.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

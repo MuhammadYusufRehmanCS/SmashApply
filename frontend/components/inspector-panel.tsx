@@ -51,7 +51,7 @@ function extractHighlightBullets(tailoredCv: string, limit = 6): string[] {
 function renderBolded(text: string) {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={i} className="font-semibold text-indigo-300">
+      <strong key={i} className="font-semibold text-emerald-300">
         {part.slice(2, -2)}
       </strong>
     ) : (
@@ -93,7 +93,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
+      <div className="shrink-0 border-b border-white/10 px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-sm font-semibold leading-snug text-zinc-100">{job.title}</h2>
           <a
@@ -101,7 +101,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
             target="_blank"
             rel="noopener noreferrer"
             title="Open original posting"
-            className="mt-0.5 shrink-0 text-zinc-600 hover:text-zinc-300"
+            className="mt-0.5 shrink-0 text-zinc-600 transition-colors hover:text-emerald-300"
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
@@ -110,12 +110,12 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
           {job.company} · {job.location || "—"}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <Pill tone="indigo">{job.role_category}</Pill>
+          <Pill tone="emerald">{job.role_category}</Pill>
           <Pill tone="zinc">{job.site}</Pill>
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-zinc-800 px-4 py-4">
+      <div className="shrink-0 border-b border-white/10 px-4 py-4">
         <div className="mb-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Match score</span>
@@ -131,7 +131,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
             <span className="font-mono text-sm text-zinc-600">—</span>
           )}
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           {score !== null && (
             <div
               className={cn("h-full rounded-full transition-all", gaugeBarColor(score))}
@@ -146,7 +146,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
             type="button"
             onClick={() => onTailor(job)}
             disabled={isTailoring}
-            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-700 disabled:opacity-50"
+            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-[#111318] text-xs font-medium text-zinc-200 transition-colors hover:border-emerald-400/35 hover:text-zinc-100 disabled:opacity-50"
           >
             {isTailoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
             {isTailoring ? "Tailoring…" : "Tailor CV"}
@@ -156,7 +156,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
             onClick={() => onDownload(job)}
             disabled={isDownloading || !isTailored}
             title={isTailored ? undefined : "Tailor the CV first"}
-            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-indigo-500 text-xs font-medium text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-400 text-xs font-semibold text-zinc-950 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
           >
             {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {isDownloading ? "Downloading…" : "Download PDF"}
@@ -165,14 +165,14 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
         {!isTailored && <p className="mt-1.5 text-[11px] text-zinc-600">Tailor the CV to enable PDF download.</p>}
       </div>
 
-      <div className="flex shrink-0 gap-4 border-b border-zinc-800 px-4">
+      <div className="flex shrink-0 gap-4 border-b border-white/10 px-4">
         <button
           type="button"
           onClick={() => setActiveTab("description")}
           className={cn(
             "border-b-2 py-2.5 text-xs font-medium transition-colors",
             activeTab === "description"
-              ? "border-indigo-500 text-zinc-100"
+              ? "border-emerald-400 text-zinc-100"
               : "border-transparent text-zinc-500 hover:text-zinc-300"
           )}
         >
@@ -184,7 +184,7 @@ export function InspectorPanel({ job, tailoringId, downloadingId, onTailor, onDo
           className={cn(
             "border-b-2 py-2.5 text-xs font-medium transition-colors",
             activeTab === "tailored"
-              ? "border-indigo-500 text-zinc-100"
+              ? "border-emerald-400 text-zinc-100"
               : "border-transparent text-zinc-500 hover:text-zinc-300"
           )}
         >
