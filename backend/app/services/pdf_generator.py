@@ -48,7 +48,10 @@ _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 # "1/1", "1 / 2", "Page 1 of 2", etc. -- a page-number footer line, not part
 # of the candidate's contact info. See _header_flowables.
-_PAGE_NUMBER_RE = re.compile(r"^(page\s+)?\d+\s*(/|of)\s*\d+$", re.IGNORECASE)
+_PAGE_NUMBER_PATTERN = r"(?:page\s+)?\d+\s*(?:/|of)\s*\d+"
+_PAGE_NUMBER_RE = re.compile(rf"^{_PAGE_NUMBER_PATTERN}$", re.IGNORECASE)
+_TRAILING_PAGE_NUMBER_RE = re.compile(rf"(?:\s*\|\s*|\s+){_PAGE_NUMBER_PATTERN}$", re.IGNORECASE)
+_PAGE_NUMBER_NOISE_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\ufeff]+")
 
 
 def _layout_color(layout: dict, key: str, fallback: str) -> str:
@@ -266,18 +269,25 @@ def _fit_font_size(text: str, font_name: str, start_size: float, max_width: floa
     return max(size, min_size)
 
 
+def _strip_header_page_number(line: str) -> str:
+    normalized = _PAGE_NUMBER_NOISE_RE.sub("", line).strip()
+    if _PAGE_NUMBER_RE.match(normalized):
+        return ""
+    return _TRAILING_PAGE_NUMBER_RE.sub("", normalized).rstrip(" |")
+
+
 def _header_flowables(
     header_section: dict | None, styles: dict, scale: float = 1.0, available_width: float | None = None
 ) -> list:
     if not header_section or not header_section["content"].strip():
         return []
-    lines = [ln.strip() for ln in header_section["content"].splitlines() if ln.strip()]
+    lines = [_strip_header_page_number(ln) for ln in header_section["content"].splitlines() if ln.strip()]
     # pypdf's text extraction pulls the page-number footer ("1/1", "Page 1 of
     # 2", ...) into the same text stream as everything else on the page, and
     # since it appears before the first detected section heading it lands in
     # this "Header" block alongside the name/contact line. It's not part of
     # the contact info -- drop it rather than pipe-joining it in.
-    lines = [ln for ln in lines if not _PAGE_NUMBER_RE.match(ln)]
+    lines = [ln for ln in lines if ln]
     if not lines:
         return []
 
