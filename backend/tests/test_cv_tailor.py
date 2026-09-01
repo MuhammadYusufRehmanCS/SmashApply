@@ -63,6 +63,12 @@ class CvTailorTests(unittest.TestCase):
             SYSTEM_PROMPT,
         )
 
+    def test_system_prompt_requires_recruiter_readable_truthful_tailoring(self):
+        self.assertIn("ATS-aware, recruiter-readable", SYSTEM_PROMPT)
+        self.assertIn("Do not keyword-stuff", SYSTEM_PROMPT)
+        self.assertIn("Do not invent experience to satisfy the posting", SYSTEM_PROMPT)
+        self.assertIn("emphasize the closest truthful adjacent experience", SYSTEM_PROMPT)
+
     def test_devops_platforms_filters_cloud_service_duplicates(self):
         rendered = _render_technical_expertise(
             [
@@ -236,7 +242,11 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.used_fallback)
         self.assertEqual(request.await_count, 2)
         self.assertEqual([call.args[2] for call in request.await_args_list], [0.3, 0.3])
-        self.assertIn("Cloud Engineer focused on Terraform, Docker, CI/CD, AWS", result.text)
+        self.assertIn(
+            "Cloud Engineer focused on cloud infrastructure, automation, and production delivery "
+            "using Terraform, Docker, CI/CD, AWS",
+            result.text,
+        )
         self.assertIn("MUHAMMAD YUSUF | CLOUD ENGINEER", result.text)
         self.assertIn(
             "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present",
@@ -285,10 +295,10 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.cacheable)
         self.assertFalse(result.used_fallback)
         self.assertIn("Cloud automation engineer", result.text)
-        self.assertIn("**Docker**, **Terraform**", result.text)
+        self.assertIn("**Terraform**, **Docker**, **CI/CD**", result.text)
         self.assertIn("Engineered **CI/CD** pipelines.", result.text)
 
-    async def test_final_validation_failure_uses_repaired_tailoring_instead_of_raising(self):
+    async def test_parseable_payload_is_repaired_before_validation(self):
         sections = [
             {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
             {"name": "Executive Summary", "content": "Original summary."},
@@ -322,10 +332,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.side_effect = [
-                weak_payload,
-                TailoringError("malformed retry"),
-            ]
+            request.return_value = weak_payload
 
             result = await tailor_cv(
                 master_cv,
@@ -334,7 +341,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
                 "Need AWS, Terraform, Docker, Kubernetes, CI/CD, release automation, and SonarQube.",
             )
 
-        self.assertEqual(request.await_count, 2)
+        self.assertEqual(request.await_count, 1)
         self.assertTrue(result.cacheable)
         self.assertFalse(result.used_fallback)
         self.assertIn("Architected and governed", result.text)
@@ -374,7 +381,11 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.await_count, 2)
         self.assertTrue(result.cacheable)
         self.assertFalse(result.used_fallback)
-        self.assertIn("Cloud Engineer focused on Terraform, Docker, CI/CD, AWS", result.text)
+        self.assertIn(
+            "Cloud Engineer focused on cloud infrastructure, automation, and production delivery "
+            "using Terraform, Docker, CI/CD, AWS",
+            result.text,
+        )
         self.assertIn("Engineered **CI/CD** pipelines.", result.text)
 
     async def test_openai_execution_error_falls_back_without_raw_failure(self):

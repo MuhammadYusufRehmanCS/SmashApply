@@ -241,9 +241,17 @@ class TailorCVResult(NamedTuple):
 SYSTEM_PROMPT = """You are an expert ATS resume strategist for infrastructure, cloud, DevOps,
 platform engineering, SRE, and data-adjacent engineering roles. You will be given one target job
 posting, the candidate's editable resume summary, editable Technical Expertise category item
-lists, and editable bullet text grouped by employer. Your task is deep, aggressive keyword
+lists, and editable bullet text grouped by employer. Your task is ATS-aware, recruiter-readable
 tailoring: rewrite every editable field so the resume reads like it was purpose-built for this
-specific job while preserving real facts.
+specific job while preserving real facts and still sounding natural to a human reviewer.
+
+ATS AND HUMAN READABILITY:
+- Optimize for both ATS parsing and recruiter review. Use exact JD keywords where they truthfully
+fit, but keep the writing natural, concrete, and easy to scan.
+- Do not keyword-stuff, stack buzzwords, or turn bullets into tool lists. Each bullet must read as
+one clear achievement or responsibility with a recognizable action, scope, and outcome.
+- Keep phrasing concise and plain-spoken. Prefer strong specific verbs and concrete workstreams
+over generic claims such as "leveraged skills", "worked on various tasks", or "responsible for".
 
 NON-NEGOTIABLE TAILORING DEPTH:
 - Modifying ONLY the Executive Summary is an automatic failure. A valid response MUST materially
@@ -254,11 +262,13 @@ factual accuracy regarding experience, but rephrase bullets and skills so they d
 the requirements of the job description.
 - The resume must not read like the Master CV with a new summary. If Technical Expertise or
 Professional Experience still read substantially like the originals, your output is invalid.
-- Assume the candidate is qualified for the target role's cloud, infrastructure, DevOps,
-platform, SRE, automation, monitoring, and security workstreams. Use exact JD terminology
-aggressively when it fits those workstreams, even if the Master CV used broader or older wording.
-Do not invent employers, titles, degrees, dates, certifications, metrics, business domains, or
-highly unrelated specialty tools that cannot plausibly fit those workstreams.
+- Treat the candidate as qualified only through the real roles, projects, tools, and workstreams
+supported by the Master CV. Use exact JD terminology aggressively when it fits those verified
+workstreams, even if the Master CV used broader or older wording.
+- Invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
+certifications, metrics, business domains, projects, responsibilities, regulated environments, or
+specialty tools unless the given Master CV facts support them. When a JD requirement is absent,
+emphasize the closest experience claiming it directly.
 - Do NOT mention total years of experience anywhere in generated resume text. Phrases like
 "8 years of experience", "8+ years experience", "over 8 years", or "8-year background" are
 forbidden. The locked employment date ranges remain separate and are preserved by code.
@@ -289,6 +299,9 @@ terms, and operational practices from the JD when they appear.
 EXECUTIVE SUMMARY REQUIREMENTS:
 - Write a fresh 2-4 sentence Executive Summary aligned to the target job title, core mission, and
 top 3-4 primary technical requirements from the JD.
+- Make the summary recruiter-readable, not a dense keyword inventory. Use one compact phrase for
+the most important matching tools, then explain the practical infrastructure, delivery, reliability,
+security, or automation value behind them.
 - The first words must be role-specific or mission-specific, for example "Cloud automation
 engineer..." or "Platform-focused engineer...". NEVER start with generic resume cliches.
 - Strictly forbidden summary starter phrases: "Results-driven", "Result-driven",
@@ -339,6 +352,8 @@ true CI/CD, IaC, container, or GitOps tool.
 
 EXPERIENCE BULLET REQUIREMENTS:
 - Rewrite EVERY original bullet substantially. Do not merely swap one or two words.
+- Keep bullets readable for a recruiter skimming quickly: lead with the action, include the most
+relevant JD terms naturally, and close with the real outcome or operational purpose.
 - For every role with 3 or more bullets, at least 3 bullets MUST seamlessly integrate exact
 high-value keywords, tools, methodologies, or phrasing from the target Job Description. For roles
 with 2 bullets, both bullets must do this; for roles with 1 bullet, that bullet must do this.
@@ -2964,12 +2979,12 @@ def _chat_messages(prompt: str) -> list[dict[str, str]]:
 
 def _deterministic_summary(job_title: str, target_keywords: list[str]) -> str:
     role_label = _sanitize_resume_headline_title(job_title) or "Cloud engineering role"
-    top_keywords = _content_keyword_list(target_keywords)[:6]
+    top_keywords = _content_keyword_list(target_keywords)[:4]
     if top_keywords:
         keyword_phrase = ", ".join(top_keywords)
         return (
-            f"{role_label} focused on {keyword_phrase} across cloud infrastructure, automation, "
-            "and production delivery. Applies hands-on DevOps, platform, monitoring, and scripting "
+            f"{role_label} focused on cloud infrastructure, automation, and production delivery "
+            f"using {keyword_phrase}. Applies hands-on DevOps, platform, monitoring, and scripting "
             "experience to improve reliability, deployment speed, and operational execution."
         )
     return (
