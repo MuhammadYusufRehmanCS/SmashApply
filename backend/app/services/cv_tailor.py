@@ -259,6 +259,13 @@ platform, SRE, automation, monitoring, and security workstreams. Use exact JD te
 aggressively when it fits those workstreams, even if the Master CV used broader or older wording.
 Do not invent employers, titles, degrees, dates, certifications, metrics, business domains, or
 highly unrelated specialty tools that cannot plausibly fit those workstreams.
+- Do NOT mention total years of experience anywhere in generated resume text. Phrases like
+"8 years of experience", "8+ years experience", "over 8 years", or "8-year background" are
+forbidden. The locked employment date ranges remain separate and are preserved by code.
+- Do NOT treat job-posting qualifiers as candidate resume facts. Terms such as "clearance
+required", "must hold clearance", "remote", "onsite", "contract", or eligibility requirements must
+not be written into the resume headline, summary, skills, or bullets unless they already describe
+the candidate in the master resume facts you were given.
 
 IMMUTABLE FIELD LOCK:
 - You are NOT given the candidate's name, contact information, degree/school section, company
@@ -338,6 +345,10 @@ with 2 bullets, both bullets must do this; for roles with 1 bullet, that bullet 
 - Across each role, spread 4-8 distinct JD keywords across the bullets when the workstreams allow
 it. Do not repeat the same JD keyword in adjacent bullets when an equivalent high-value JD term can
 be used instead.
+- The Professional Experience section must carry the strongest JD keyword density. Do not leave JD
+terms only in the Executive Summary or Technical Expertise. If a JD names tools, methodologies,
+platform practices, programming languages, SDLC practices, observability, security, automation, or
+cloud services that fit a bullet's workstream, rewrite that bullet to include those exact terms.
 - Every returned experience bullet must have different wording from the original. Keep the same
 truthful fact, but rewrite the action verb, emphasis, keyword placement, and impact framing so it
 aligns to the JD.
@@ -376,6 +387,8 @@ technical-expertise category. Bold tool names, platforms, metrics, or 2-4 word i
 Never bold an entire sentence.
 - Do not add meta-commentary, notes, disclaimers, placeholders, or parenthetical explanations
 about the rewrite. Resume fields must contain resume text only.
+- Do not calculate, infer, or state total tenure/years of experience. Keep JD keyword alignment in
+tools, workstreams, responsibilities, and outcomes instead.
 - Respond with ONLY a single JSON object, no markdown fences and no extra keys, matching exactly:
 {"keywords": ["...", "..."], "summary": "...", "technical_expertise": ["category 1 tool list",
 "category 2 tool list"], "experience_bullets": [["bullet 1 for employer 1",
@@ -425,6 +438,62 @@ _BANNED_SUMMARY_STARTER_RE = re.compile(
     re.IGNORECASE,
 )
 
+_YEARS_VALUE_RE = (
+    r"(?:\d{1,2}\+?|\d{1,2}\s*[-\u2013]\s*\d{1,2}|one|two|three|four|five|six|"
+    r"seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen)"
+)
+_YEARS_QUALIFIER_RE = r"(?:(?:over|more than|nearly|about|around|approximately|at least)\s+)?"
+_YEARS_EXPERIENCE_RE = re.compile(
+    rf"\b(?P<prefix>with|bringing|offering|including)?\s*"
+    rf"{_YEARS_QUALIFIER_RE}{_YEARS_VALUE_RE}\s*\+?\s+years?"
+    r"(?:['\u2019]\s*)?(?:\s+of)?\s+"
+    r"(?P<descriptor>(?:(?:hands-on|professional|relevant|cloud|devops|platform|sre|"
+    r"infrastructure|software|engineering|technical)\s+)*)"
+    r"experience\b",
+    re.IGNORECASE,
+)
+_YEARS_WORK_RE = re.compile(
+    rf"\b{_YEARS_QUALIFIER_RE}{_YEARS_VALUE_RE}\s*\+?\s+years?\s+"
+    r"(?=(?:in|with|across|building|supporting|managing|leading|operating|automating)\b)",
+    re.IGNORECASE,
+)
+_YEARS_BACKGROUND_RE = re.compile(
+    rf"\b{_YEARS_QUALIFIER_RE}{_YEARS_VALUE_RE}\s*[-\s]+years?\s+"
+    r"(?P<descriptor>(?:cloud|devops|platform|sre|infrastructure|software|engineering|technical)\s+)?"
+    r"(?:background|track record|career|history|tenure)\b",
+    re.IGNORECASE,
+)
+_JOB_REQUIREMENT_PHRASE_RE = re.compile(
+    r"\s*(?:[-\u2013|,/]\s*)?\b(?:"
+    r"clearance\s+required|"
+    r"required\s+clearance|"
+    r"requires?\s+(?:an?\s+)?(?:active\s+)?(?:public\s+trust\s+|secret\s+|top\s+secret\s+|"
+    r"ts/sci\s+|security\s+)?clearance|"
+    r"must\s+(?:have|hold|obtain|maintain|be\s+eligible\s+for).{0,60}\bclearance|"
+    r"eligible\s+for\s+(?:public\s+trust\s+|secret\s+|top\s+secret\s+|ts/sci\s+|security\s+)?clearance"
+    r")\b",
+    re.IGNORECASE,
+)
+_JOB_TITLE_PAREN_QUALIFIER_RE = re.compile(
+    r"\s*[\(\[][^\)\]]*(?:clearance|remote|hybrid|onsite|on-site|contract|w2|c2c|visa|"
+    r"citizen|citizenship)[^\)\]]*[\)\]]",
+    re.IGNORECASE,
+)
+_JOB_TITLE_TRAILING_QUALIFIER_RE = re.compile(
+    r"\s*[-\u2013|:/]\s*(?:"
+    r".*\bclearance\b.*|"
+    r"remote|hybrid|onsite|on-site|contract|contractor|temporary|temp|w2|c2c|"
+    r"full[-\s]?time|part[-\s]?time|"
+    r"(?:u\.?s\.?\s+)?citizen(?:ship)?\s+required|"
+    r"visa\s+sponsorship.*"
+    r")$",
+    re.IGNORECASE,
+)
+_UNVERIFIED_STATUS_KEYWORD_RE = re.compile(
+    r"\b(?:clearance|polygraph|public\s+trust|ts/sci)\b",
+    re.IGNORECASE,
+)
+
 # The system prompt requires every bullet to use a leading "-" (and
 # explicitly says to convert any other bullet glyph like "•" to it), but
 # model responses do not always comply -- and separately, extracted PDFs can
@@ -444,6 +513,66 @@ _LEADING_BULLET_RE = re.compile(rf"^(\s*)[{_NON_DASH_BULLET_CHARS}]+\s*")
 
 def _normalize_bullet_marker(line: str) -> str:
     return _LEADING_BULLET_RE.sub(r"\1- ", line)
+
+
+def _remove_total_years_experience_claims(text: str) -> str:
+    def replace_experience(match: re.Match) -> str:
+        prefix = (match.group("prefix") or "").strip()
+        descriptor = (match.group("descriptor") or "").strip()
+        descriptor_words = [
+            word
+            for word in descriptor.split()
+            if word.lower() not in {"hands-on", "professional", "relevant"}
+        ]
+        descriptor_prefix = " ".join(descriptor_words)
+        replacement = (
+            f"hands-on {descriptor_prefix} experience"
+            if descriptor_prefix
+            else "hands-on experience"
+        )
+        return f"{prefix} {replacement}" if prefix else replacement
+
+    def replace_background(match: re.Match) -> str:
+        descriptor = (match.group("descriptor") or "").strip()
+        return f"hands-on {descriptor}background" if descriptor else "hands-on background"
+
+    cleaned = _YEARS_EXPERIENCE_RE.sub(replace_experience, text or "")
+    cleaned = _YEARS_WORK_RE.sub("hands-on work ", cleaned)
+    cleaned = _YEARS_BACKGROUND_RE.sub(replace_background, cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
+    return cleaned.strip()
+
+
+def _remove_job_requirement_phrases(text: str) -> str:
+    cleaned = _JOB_REQUIREMENT_PHRASE_RE.sub("", text or "")
+    cleaned = re.sub(r"\s+[-\u2013|,/]\s*([,.;:])", r"\1", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:])", r"\1", cleaned)
+    return cleaned.strip(" -\u2013|,/")
+
+
+def _sanitize_resume_headline_title(job_title: str) -> str:
+    title = _remove_job_requirement_phrases(_clean_field_text(job_title))
+    previous = None
+    while title and title != previous:
+        previous = title
+        title = _JOB_TITLE_PAREN_QUALIFIER_RE.sub("", title)
+        title = _JOB_TITLE_TRAILING_QUALIFIER_RE.sub("", title)
+        title = _remove_job_requirement_phrases(title)
+        title = re.sub(r"\s{2,}", " ", title).strip(" -\u2013|:/,")
+    return title
+
+
+def _looks_like_unverified_status_keyword(keyword: str) -> bool:
+    return _UNVERIFIED_STATUS_KEYWORD_RE.search(keyword or "") is not None
+
+
+def _has_total_years_experience_claim(text: str) -> bool:
+    return any(
+        pattern.search(text or "")
+        for pattern in (_YEARS_EXPERIENCE_RE, _YEARS_WORK_RE, _YEARS_BACKGROUND_RE)
+    )
 
 
 def _clean_field_text(text: str) -> str:
@@ -467,8 +596,12 @@ def _clean_field_text(text: str) -> str:
             if stripped_line == line:
                 break
             line = stripped_line
+        line = _remove_total_years_experience_claims(line)
+        line = _remove_job_requirement_phrases(line)
         lines.append(line)
-    return "\n".join(lines).replace("```", "").strip()
+    return _remove_job_requirement_phrases(
+        _remove_total_years_experience_claims("\n".join(lines).replace("```", ""))
+    ).strip()
 
 
 def _capitalize_first_alpha(text: str) -> str:
@@ -876,7 +1009,7 @@ def _render_technical_expertise(entries: list[dict], tailored_items: list[str]) 
 
 
 def _tailor_header_title(header_content: str, job_title: str) -> str:
-    target_title = re.sub(r"\s+", " ", _clean_field_text(job_title).strip())
+    target_title = re.sub(r"\s+", " ", _sanitize_resume_headline_title(job_title).strip())
     if not target_title:
         return header_content
 
@@ -1009,10 +1142,16 @@ def _keyword_canonical_key(keyword: str) -> str:
         "arm/bicep": {"arm bicep", "arm/bicep", "bicep"},
         "aws cdk": {"aws cdk", "cloud development kit"},
         "ci/cd": {"ci cd", "ci/cd", "continuous integration", "continuous delivery"},
+        "c#": {"c#", "c sharp"},
+        ".net": {".net", "asp.net", "asp net", "dotnet", "net"},
         "fluxcd": {"flux cd", "fluxcd"},
         "golang": {"go", "golang"},
         "iac": {"iac", "infrastructure as code"},
-        "node.js": {"javascript/node js", "node js", "node.js"},
+        "node.js": {"express js", "express.js", "javascript/node js", "node js", "node.js"},
+        "react": {"react", "react js", "react.js"},
+        "rest api": {"api development", "rest api", "rest apis", "restful api", "restful apis"},
+        "sql server": {"microsoft sql server", "ms sql", "mssql", "sql server"},
+        "entity framework": {"entity framework", "entity framework core"},
         "service catalog": {"service catalog", "servicecatalog"},
         "slo/error budgeting": {
             "error budget",
@@ -1063,6 +1202,10 @@ def _keyword_list(keywords: list[str]) -> list[str]:
     output: list[str] = []
     for keyword in keywords:
         cleaned = re.sub(r"\s+", " ", (keyword or "").replace("**", "").strip())
+        if _has_total_years_experience_claim(cleaned) or _looks_like_unverified_status_keyword(cleaned):
+            continue
+        cleaned = _remove_total_years_experience_claims(cleaned)
+        cleaned = _remove_job_requirement_phrases(cleaned)
         key = _keyword_canonical_key(cleaned)
         if cleaned and key not in seen:
             seen.add(key)
@@ -1154,6 +1297,36 @@ _KNOWN_RESUME_KEYWORDS = (
     "Cloud Storage",
     "JavaScript/Node.js",
     "TypeScript",
+    "JavaScript",
+    "Node.js",
+    "React",
+    "React.js",
+    "Next.js",
+    "Angular",
+    "Vue.js",
+    "HTML",
+    "CSS",
+    "Tailwind CSS",
+    "Redux",
+    "Express.js",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "Spring Boot",
+    ".NET",
+    "C#",
+    "ASP.NET",
+    "SQL Server",
+    "Microsoft SQL Server",
+    "Entity Framework",
+    "Entity Framework Core",
+    "LINQ",
+    "Unit Testing",
+    "xUnit",
+    "NUnit",
+    "Jest",
+    "Cypress",
+    "Selenium",
     "ARM/Bicep",
     "API Gateway",
     "CloudWatch",
@@ -1260,12 +1433,16 @@ _KNOWN_RESUME_KEYWORDS = (
     "Golang",
     "Java",
     "SQL",
+    "MongoDB",
     "YAML",
     "JSON",
     "REST APIs",
+    "RESTful APIs",
+    "API Development",
     "GraphQL",
     "CLI",
     "SDKs",
+    "Git",
     "ServiceNow",
     "Jira",
     "Confluence",
@@ -1317,7 +1494,7 @@ def _keyword_position(text_lower: str, keyword: str) -> int | None:
     keyword_lower = keyword.strip().lower()
     if not keyword_lower:
         return None
-    if re.fullmatch(r"[\w\s\-\+#]+", keyword_lower):
+    if re.fullmatch(r"[\w\s\-]+", keyword_lower):
         match = re.search(rf"\b{re.escape(keyword_lower)}\b", text_lower)
         return match.start() if match else None
     index = text_lower.find(keyword_lower)
@@ -1360,7 +1537,7 @@ def _keyword_occurrence_count(text: str, keyword: str) -> int:
     keyword_lower = keyword.strip().lower()
     if not keyword_lower:
         return 0
-    if re.fullmatch(r"[\w\s\-\+#]+", keyword_lower):
+    if re.fullmatch(r"[\w\s\-]+", keyword_lower):
         return len(re.findall(rf"\b{re.escape(keyword_lower)}\b", text_lower))
     return text_lower.count(keyword_lower)
 
@@ -1383,11 +1560,13 @@ def _repeated_long_keywords(text: str, keywords: list[str]) -> list[str]:
 
 def _keyword_matches_allowed_terms(keyword: str, allowed_terms: tuple[str, ...]) -> bool:
     keyword_key = _comparison_key(keyword)
+    keyword_canonical = _keyword_canonical_key(keyword)
     for term in allowed_terms:
         term_key = _comparison_key(term)
+        term_canonical = _keyword_canonical_key(term)
         if not term_key:
             continue
-        if keyword_key == term_key:
+        if keyword_key == term_key or keyword_canonical == term_canonical:
             return True
         if len(term_key) <= 3:
             if re.search(rf"\b{re.escape(term_key)}\b", keyword_key):
@@ -1423,13 +1602,32 @@ def _bullet_keyword_candidates(original: str, keywords: list[str]) -> list[str]:
             "CodeBuild",
             "CodeDeploy",
             "CodePipeline",
+            "GitOps",
+            "ArgoCD",
+            "Argo CD",
+            "FluxCD",
             "GitHub Actions",
             "GitLab CI",
             "Jenkins",
+            "Helm",
             "Kustomize",
             "Maven",
             "Gradle",
             "npm",
+            "JavaScript/Node.js",
+            "JavaScript",
+            "Node.js",
+            "TypeScript",
+            "React",
+            "React.js",
+            "Next.js",
+            "Angular",
+            "Vue.js",
+            "REST APIs",
+            "RESTful APIs",
+            "API Development",
+            "GraphQL",
+            "Microservices",
             "SAST",
             "DAST",
             "SBOM",
@@ -1654,6 +1852,72 @@ def _bullet_keyword_candidates(original: str, keywords: list[str]) -> list[str]:
         ("artifact", "registry", "registries", "acr", "ecr", "nexus"),
         ("ACR/ECR", "ECR", "Nexus", "Artifactory", "Harbor", "Artifact Management", "Release Automation"),
     )
+    add_when(
+        (
+            "application",
+            "applications",
+            "api",
+            "apis",
+            "service",
+            "services",
+            "microservice",
+            "microservices",
+            "software",
+            "developer",
+            "development",
+            "sdlc",
+            "enterprise",
+        ),
+        (
+            "JavaScript/Node.js",
+            "JavaScript",
+            "Node.js",
+            "TypeScript",
+            "React",
+            "React.js",
+            "Next.js",
+            "Angular",
+            "Vue.js",
+            "HTML",
+            "CSS",
+            "Tailwind CSS",
+            "Redux",
+            "Express.js",
+            "FastAPI",
+            "Django",
+            "Flask",
+            "Spring Boot",
+            ".NET",
+            "C#",
+            "ASP.NET",
+            "SQL Server",
+            "Microsoft SQL Server",
+            "Entity Framework",
+            "Entity Framework Core",
+            "LINQ",
+            "Java",
+            "REST APIs",
+            "RESTful APIs",
+            "API Development",
+            "GraphQL",
+            "SQL",
+            "PostgreSQL",
+            "MySQL",
+            "MongoDB",
+            "NoSQL",
+            "Microservices",
+            "SDLC",
+            "Agile",
+            "Scrum",
+            "Kanban",
+            "Unit Testing",
+            "xUnit",
+            "NUnit",
+            "Jest",
+            "Cypress",
+            "Selenium",
+        ),
+    )
     return _keyword_list(candidates)
 
 
@@ -1675,7 +1939,30 @@ def _required_role_keyword_count(original_bullets: list[str], target_keywords: l
     if not original_bullets or not distinct_candidates:
         return 0
 
-    return min(8, distinct_candidates, max(3, len(original_bullets) + 2))
+    return min(8, distinct_candidates, max(4, len(original_bullets) * 2))
+
+
+def _experience_keyword_candidates(
+    experience_entries: list[dict],
+    target_keywords: list[str],
+) -> list[str]:
+    return _keyword_list([
+        keyword
+        for entry in experience_entries
+        for original in entry["bullets"]
+        for keyword in _bullet_keyword_candidates(original, target_keywords)
+    ])
+
+
+def _required_experience_keyword_count(
+    experience_entries: list[dict],
+    target_keywords: list[str],
+) -> int:
+    candidates = _experience_keyword_candidates(experience_entries, target_keywords)
+    total_bullets = sum(len(entry["bullets"]) for entry in experience_entries)
+    if not candidates or not total_bullets:
+        return 0
+    return min(16, len(candidates), max(6, total_bullets * 2))
 
 
 def _editable_keyword_source(
@@ -1707,14 +1994,51 @@ def _keyword_rank(text: str, keywords: list[str]) -> int | None:
 def _bold_keywords(text: str, keywords: list[str], limit: int = 4) -> str:
     result = text
     applied = 0
-    for keyword in _keyword_list(keywords):
+    ordered_keywords = sorted(_keyword_list(keywords), key=lambda item: len(item), reverse=True)
+    for keyword in ordered_keywords:
         if applied >= limit:
             break
-        pattern = re.compile(rf"(?<!\*)({re.escape(keyword)})(?!\*)", re.IGNORECASE)
+        if re.fullmatch(r"[\w\s\-]+", keyword.strip()):
+            pattern = re.compile(rf"(?<!\*)\b({re.escape(keyword)})\b(?!\*)", re.IGNORECASE)
+        else:
+            pattern = re.compile(rf"(?<!\*)({re.escape(keyword)})(?!\*)", re.IGNORECASE)
         result, count = pattern.subn(r"**\1**", result, count=1)
         if count:
             applied += 1
     return result
+
+
+def _normalize_stacked_keyword_phrases(text: str) -> str:
+    def collapse_application_delivery(match: re.Match) -> str:
+        raw_items = re.split(r"\s+and\s+", match.group(1))
+        items = [item.strip() for item in raw_items if item.strip()]
+        if len(items) < 3:
+            return match.group(0)
+        return f"across {', '.join(items[:-1])}, and {items[-1]} application delivery"
+
+    text = re.sub(
+        r"(\*\*[^*]+\*\*)\s+(\*\*[^*]+\*\*)\s+(\*\*[^*]+\*\*)\s+(coverage|delivery practices)",
+        r"\1, \2, and \3 \4",
+        text,
+    )
+    text = re.sub(
+        r"(\*\*[^*]+\*\*)\s+(\*\*[^*]+\*\*)\s+(coverage|delivery practices)",
+        r"\1 and \2 \3",
+        text,
+    )
+    text = re.sub(
+        r"\bacross\s+((?:\*\*[^*]+\*\*|[A-Za-z0-9+#./-]+)(?:\s+and\s+(?:\*\*[^*]+\*\*|[A-Za-z0-9+#./-]+)){2,})\s+application delivery",
+        collapse_application_delivery,
+        text,
+    )
+    text = re.sub(r"\*\*Docker\*\*\s+\*\*Kubernetes\*\*", r"**Docker/Kubernetes**", text)
+    text = re.sub(r"\*\*Docker\*\*/\*\*Kubernetes\*\*", r"**Docker/Kubernetes**", text)
+    text = re.sub(
+        r"\b(?:\*\*)?React(?:\*\*)?-aligned\s+(?:\*\*)?TypeScript(?:\*\*)?-aligned\s+services\b",
+        r"**React/TypeScript**-aligned services",
+        text,
+    )
+    return text
 
 
 _CLOUD_PROVIDER_ITEMS = {
@@ -1779,6 +2103,7 @@ _CLOUD_CATEGORY_ALLOWED_HINTS = (
     "landing zone",
     "lambda",
     "load balancing",
+    "mongodb",
     "network",
     "pub/sub",
     "rabbitmq",
@@ -1792,6 +2117,7 @@ _CLOUD_CATEGORY_ALLOWED_HINTS = (
     "sns",
     "sqs",
     "ssl/tls",
+    "sql server",
     "step functions",
     "storage",
     "vnet",
@@ -1872,34 +2198,58 @@ _MONITORING_SECURITY_CATEGORY_ALLOWED_HINTS = (
 _LANGUAGE_TOOLS_CATEGORY_ALLOWED_HINTS = (
     "agile",
     "api",
+    "api development",
+    "angular",
     "bash",
+    "c#",
     "cli",
     "confluence",
+    "css",
+    "cypress",
+    "django",
+    "dotnet",
+    "express",
+    "fastapi",
+    "flask",
     "go",
     "golang",
     "gradle",
     "graphql",
+    "html",
     "itil",
     "java",
     "javascript",
+    "jest",
     "jira",
     "json",
     "kanban",
+    "linq",
     "linux",
     "maven",
     "node.js",
+    "next.js",
+    "nunit",
     "npm",
     "powershell",
     "python",
+    "react",
     "rest",
+    "redux",
     "scrum",
     "sdk",
+    "selenium",
     "sdlc",
     "servicenow",
     "shell",
     "sql",
+    "sql server",
+    "spring",
+    "tailwind",
     "typescript",
+    "unit testing",
+    "vue",
     "windows",
+    "xunit",
     "yaml",
 )
 
@@ -1998,31 +2348,61 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
 
     def append_phrase(phrase: str) -> str:
         stripped = text.rstrip()
+        if phrase.endswith(" coverage"):
+            keyword_phrase = phrase.removesuffix(" coverage")
+            coverage_match = re.search(r"\s+with\s+(.+?)\s+coverage\.?$", stripped, re.IGNORECASE)
+            if coverage_match:
+                prefix = stripped[: coverage_match.start()]
+                existing = coverage_match.group(1).rstrip(", ")
+                return f"{prefix} with {existing}, {keyword_phrase} coverage."
+        if phrase.endswith(" delivery practices"):
+            keyword_phrase = phrase.removesuffix(" delivery practices").removeprefix("through ")
+            delivery_match = re.search(r"\s+through\s+(.+?)\s+delivery practices\.?$", stripped, re.IGNORECASE)
+            if delivery_match:
+                prefix = stripped[: delivery_match.start()]
+                existing = delivery_match.group(1).rstrip(", ")
+                return f"{prefix} through {existing}, {keyword_phrase} delivery practices."
+        if phrase.endswith(" automation"):
+            keyword_phrase = phrase.removesuffix(" automation").removeprefix("using ")
+            automation_match = re.search(r"\s+using\s+(.+?)\s+automation\.?$", stripped, re.IGNORECASE)
+            if automation_match:
+                prefix = stripped[: automation_match.start()]
+                existing = automation_match.group(1).rstrip(", ")
+                return f"{prefix} using {existing}, {keyword_phrase} automation."
+        if phrase.endswith(" application delivery"):
+            keyword_phrase = phrase.removesuffix(" application delivery").removeprefix("across ")
+            app_match = re.search(r"\s+across\s+(.+?)\s+application delivery\.?$", stripped, re.IGNORECASE)
+            if app_match:
+                prefix = stripped[: app_match.start()]
+                existing = app_match.group(1).rstrip(", ")
+                return f"{prefix} across {existing}, {keyword_phrase} application delivery."
         if stripped.endswith("."):
             return f"{stripped[:-1]} {phrase}."
         return f"{stripped} {phrase}"
 
     if lowered_keyword != "ci/cd" and re.search(r"\bci/cd\s+pipelines?\s+with\b", text, re.IGNORECASE):
-        candidate = re.sub(
-            r"\b(CI/CD\s+pipelines?)\b",
-            lambda match: f"{match.group(1)} and {keyword} workflows",
-            text,
-            count=1,
-            flags=re.IGNORECASE,
-        )
-        if candidate != text and _keyword_match_count(candidate, [keyword]):
-            return candidate
+        if _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS):
+            candidate = re.sub(
+                r"\b(CI/CD\s+pipelines?)\b",
+                lambda match: f"{match.group(1)} and {keyword} workflows",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if candidate != text and _keyword_match_count(candidate, [keyword]):
+                return candidate
 
     if lowered_keyword != "ci/cd" and re.search(r"\bci/cd\s+pipelines?\b", text, re.IGNORECASE):
-        candidate = re.sub(
-            r"\b(CI/CD\s+pipelines?)\b",
-            lambda match: f"{match.group(1)} with {keyword}",
-            text,
-            count=1,
-            flags=re.IGNORECASE,
-        )
-        if candidate != text and _keyword_match_count(candidate, [keyword]):
-            return candidate
+        if _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS):
+            candidate = re.sub(
+                r"\b(CI/CD\s+pipelines?)\b",
+                lambda match: f"{match.group(1)} with {keyword}",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if candidate != text and _keyword_match_count(candidate, [keyword]):
+                return candidate
 
     devops_keyword = _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS)
     container_keyword = _keyword_matches_allowed_terms(
@@ -2132,6 +2512,28 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
             ]
         )
     if language_keyword:
+        existing_automation_match = re.search(r"\busing\s+(.+?)\s+automation\b", text, re.IGNORECASE)
+        if existing_automation_match:
+            candidate = re.sub(
+                r"\busing\s+(.+?)\s+automation\b",
+                lambda match: f"using {match.group(1).rstrip(', ')} and {keyword} automation",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if candidate != text and _keyword_match_count(candidate, [keyword]):
+                return candidate
+        existing_app_match = re.search(r"\bacross\s+(.+?)\s+application delivery\b", text, re.IGNORECASE)
+        if existing_app_match:
+            candidate = re.sub(
+                r"\bacross\s+(.+?)\s+application delivery\b",
+                lambda match: f"across {match.group(1).rstrip(', ')} and {keyword} application delivery",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if candidate != text and _keyword_match_count(candidate, [keyword]):
+                return candidate
         replacements.extend(
             [
                 (
@@ -2141,6 +2543,14 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
                 (
                     re.compile(r"\b(operations|administration)\b", re.IGNORECASE),
                     lambda match: f"{keyword}-enabled {match.group(1)}",
+                ),
+                (
+                    re.compile(r"\b(enterprise\s+applications|applications?|microservices?|services?)\b", re.IGNORECASE),
+                    lambda match: f"{keyword}-aligned {match.group(1)}",
+                ),
+                (
+                    re.compile(r"\b(development|delivery)\b", re.IGNORECASE),
+                    lambda match: f"{keyword}-focused {match.group(1)}",
                 ),
             ]
         )
@@ -2170,8 +2580,29 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
         return append_phrase(f"with {keyword} coverage")
     if _keyword_matches_allowed_terms(keyword, _LANGUAGE_TOOLS_CATEGORY_ALLOWED_HINTS) and _contains_any(
         lowered_text,
-        ("automated", "automation", "script", "tool", "api", "administration"),
+        (
+            "automated",
+            "automation",
+            "script",
+            "tool",
+            "api",
+            "administration",
+            "application",
+            "deployment",
+            "delivery",
+            "service",
+            "software",
+            "development",
+            "enterprise",
+            "pipeline",
+            "release",
+        ),
     ):
+        if _contains_any(
+            lowered_text,
+            ("application", "deployment", "delivery", "service", "software", "development", "enterprise", "pipeline", "release"),
+        ):
+            return append_phrase(f"across {keyword} application delivery")
         return append_phrase(f"using {keyword} automation")
     return text
 
@@ -2225,15 +2656,36 @@ def _rewrite_experience_bullet(
 ) -> str:
     rewritten = _clean_field_text(original).strip()
     content_keywords = _content_keyword_list(keywords)
+    avoid_keys = {_keyword_canonical_key(keyword) for keyword in _content_keyword_list(avoid_keywords or [])}
+
+    def already_used(keyword: str) -> bool:
+        return _keyword_canonical_key(keyword) in avoid_keys
+
+    def unused_content_keyword(keyword: str) -> str:
+        wanted_key = _keyword_canonical_key(keyword)
+        for content_keyword in content_keywords:
+            if (
+                _keyword_canonical_key(content_keyword) == wanted_key
+                and not already_used(content_keyword)
+                and not _keyword_match_count(rewritten, [content_keyword])
+            ):
+                return content_keyword
+        return ""
+
     for pattern, replacement in _BULLET_ACTION_REWRITES:
         rewritten, count = pattern.subn(replacement, rewritten, count=1)
         if count:
             break
 
     keyword_text = " ".join(content_keywords).lower()
-    if "ci/cd" in keyword_text and "ci/cd" not in rewritten.lower() and "pipeline" in rewritten.lower():
+    if (
+        "ci/cd" in keyword_text
+        and not already_used("CI/CD")
+        and "ci/cd" not in rewritten.lower()
+        and "pipeline" in rewritten.lower()
+    ):
         rewritten = re.sub(r"\b(pipelines?)\b", r"CI/CD \1", rewritten, count=1, flags=re.IGNORECASE)
-    if "registry" in keyword_text and "containerized services" in rewritten.lower():
+    if "registry" in keyword_text and not already_used("registry") and "containerized services" in rewritten.lower():
         rewritten = re.sub(
             r"\bcontainerized\s+services\b",
             "container registry-backed services",
@@ -2241,7 +2693,11 @@ def _rewrite_experience_bullet(
             count=1,
             flags=re.IGNORECASE,
         )
-    if "production reliability" in keyword_text and "production workloads" in rewritten.lower():
+    if (
+        "production reliability" in keyword_text
+        and not already_used("Production Reliability")
+        and "production workloads" in rewritten.lower()
+    ):
         rewritten = re.sub(
             r"\bproduction\s+workloads\b",
             "production reliability workloads",
@@ -2250,15 +2706,34 @@ def _rewrite_experience_bullet(
             flags=re.IGNORECASE,
         )
 
-    bullet_keywords = _bullet_keyword_candidates(original, content_keywords)
-    if avoid_keywords:
-        avoid_keys = {_keyword_canonical_key(keyword) for keyword in avoid_keywords}
-        bullet_keywords = (
-            [keyword for keyword in bullet_keywords if _keyword_canonical_key(keyword) not in avoid_keys]
-            + [keyword for keyword in bullet_keywords if _keyword_canonical_key(keyword) in avoid_keys]
+    unit_testing_keyword = unused_content_keyword("Unit Testing")
+    if unit_testing_keyword and re.search(r"\bquality\s+gates?\b", rewritten, re.IGNORECASE):
+        rewritten = re.sub(
+            r"\bquality\s+gates?\b",
+            f"{unit_testing_keyword} quality gates",
+            rewritten,
+            count=1,
+            flags=re.IGNORECASE,
         )
 
-    target_bullet_keyword_count = min(4, len(bullet_keywords))
+    dotnet_keyword = unused_content_keyword(".NET")
+    if dotnet_keyword and _contains_any(
+        rewritten.lower(),
+        ("application", "deployment", "delivery", "service", "software", "pipeline", "release", "workload"),
+    ):
+        rewritten = _inject_keyword_into_bullet(rewritten, dotnet_keyword)
+
+    bullet_keywords = _bullet_keyword_candidates(original, content_keywords)
+    if avoid_keys:
+        fresh_keywords = [
+            keyword for keyword in bullet_keywords if _keyword_canonical_key(keyword) not in avoid_keys
+        ]
+        reused_keywords = [
+            keyword for keyword in bullet_keywords if _keyword_canonical_key(keyword) in avoid_keys
+        ]
+        bullet_keywords = fresh_keywords if len(fresh_keywords) >= 3 else fresh_keywords + reused_keywords
+
+    target_bullet_keyword_count = min(6, len(bullet_keywords))
     for keyword in bullet_keywords:
         if _keyword_match_count(rewritten, bullet_keywords) >= target_bullet_keyword_count:
             break
@@ -2266,6 +2741,7 @@ def _rewrite_experience_bullet(
 
     highlight_terms = bullet_keywords + content_keywords + list(_DEFAULT_BULLET_HIGHLIGHTS)
     rewritten = _bold_keywords(rewritten, highlight_terms, limit=4)
+    rewritten = _normalize_stacked_keyword_phrases(rewritten)
 
     if _comparison_key(rewritten) == _comparison_key(original):
         rewritten = f"Delivered {rewritten[0].lower()}{rewritten[1:]}" if rewritten else original
@@ -2335,7 +2811,7 @@ def _validate_tailored_payload(
     complete-output requirements to salvage valid tailored sections from a
     locally brittle model response instead of falling all the way back to the
     master CV."""
-    target_keywords = _keyword_list(target_keywords or [])
+    target_keywords = _content_keyword_list(target_keywords or [])
 
     if summary_required:
         summary = _prepare_summary_text(payload.summary)
@@ -2372,7 +2848,7 @@ def _validate_tailored_payload(
                 category_keywords = [
                     keyword for keyword in target_keywords if _keyword_fits_category(entry["label"], keyword)
                 ]
-                required_skill_matches = min(2, len(category_keywords))
+                required_skill_matches = min(4, len(category_keywords))
                 if not required_skill_matches:
                     continue
                 matched_skill_keywords = _keyword_match_count(cleaned_item, category_keywords)
@@ -2460,6 +2936,19 @@ def _validate_tailored_payload(
                         f"distinct JD keyword matches; required {required_role_keywords}."
                     )
             cleaned_groups.append(cleaned)
+
+        required_experience_keywords = _required_experience_keyword_count(experience_entries, target_keywords)
+        if require_complete and required_experience_keywords:
+            experience_keywords = _experience_keyword_candidates(experience_entries, target_keywords)
+            matched_experience_keywords = _keyword_match_count(
+                " ".join(" ".join(group) for group in cleaned_groups),
+                experience_keywords,
+            )
+            if matched_experience_keywords < required_experience_keywords:
+                raise TailoringError(
+                    f"Model tailored Professional Experience with only {matched_experience_keywords} "
+                    f"distinct JD keyword matches; required {required_experience_keywords}."
+                )
         payload.experience_bullets = cleaned_groups
 
 
@@ -2474,8 +2963,8 @@ def _chat_messages(prompt: str) -> list[dict[str, str]]:
 
 
 def _deterministic_summary(job_title: str, target_keywords: list[str]) -> str:
-    role_label = (job_title or "").strip() or "Cloud engineering role"
-    top_keywords = _keyword_list(target_keywords)[:6]
+    role_label = _sanitize_resume_headline_title(job_title) or "Cloud engineering role"
+    top_keywords = _content_keyword_list(target_keywords)[:6]
     if top_keywords:
         keyword_phrase = ", ".join(top_keywords)
         return (
@@ -2614,7 +3103,7 @@ async def tailor_cv(
         sections, job_title, company_name, job_description_text
     )
     summary_required = any(_is_summary_section(s["name"]) for s in sections)
-    target_keywords = _keywords_from_text(f"{job_title}\n{job_description_text}")
+    target_keywords = _content_keyword_list(_keywords_from_text(f"{job_title}\n{job_description_text}"))
     last_payload: _TailoredPayload | None = None
 
     for attempt, temperature in enumerate((0.3, 0.3), start=1):
@@ -2623,20 +3112,20 @@ async def tailor_cv(
             tailored_payload = await _request_tailored_payload(settings, prompt, temperature)
             tailored_payload.keywords = _content_keyword_list(target_keywords + tailored_payload.keywords)
             last_payload = tailored_payload
-            if attempt == 2:
-                repair_keywords = target_keywords
-                _repair_tailored_payload(
-                    tailored_payload,
-                    experience_entries,
-                    skills_entries,
-                    repair_keywords,
-                )
+            repair_keywords = _content_keyword_list(target_keywords + tailored_payload.keywords)
+            _repair_tailored_payload(
+                tailored_payload,
+                experience_entries,
+                skills_entries,
+                repair_keywords,
+            )
+            validation_keywords = _content_keyword_list(target_keywords + tailored_payload.keywords)
             _validate_tailored_payload(
                 tailored_payload,
                 summary_required,
                 experience_entries,
                 skills_entries,
-                target_keywords=target_keywords,
+                target_keywords=validation_keywords,
             )
             return _result_from_payload(
                 sections,
@@ -2660,7 +3149,9 @@ async def tailor_cv(
                 )
                 return _fallback_result(sections)
 
-            repair_keywords = target_keywords
+            repair_keywords = _content_keyword_list(
+                target_keywords + (last_payload.keywords if last_payload is not None else [])
+            )
             repair_candidates: list[tuple[str, _TailoredPayload]] = []
             if last_payload is not None:
                 repair_candidates.append(("last parseable OpenAI payload", last_payload))
@@ -2770,7 +3261,7 @@ def _keyword_present(keyword: str, tailored_text_lower: str) -> bool:
     keyword_lower = keyword.strip().lower()
     if not keyword_lower:
         return False
-    if re.fullmatch(r"[\w\s\-\+#]+", keyword_lower):
+    if re.fullmatch(r"[\w\s\-]+", keyword_lower):
         return re.search(rf"\b{re.escape(keyword_lower)}\b", tailored_text_lower) is not None
     return keyword_lower in tailored_text_lower
 
