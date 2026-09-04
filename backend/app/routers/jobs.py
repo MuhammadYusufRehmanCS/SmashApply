@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job, MasterCV
-from app.roles import ALIGNED_ROLES, PRIMARY_ROLE_DEFAULT
+from app.roles import PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
 from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv
-from app.services.job_scraper import scrape_for_roles
+from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names
 from app.services.pdf_generator import build_ats_pdf
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -23,7 +23,7 @@ DEFAULT_USER_INITIALS = "MYR"
 
 @router.get("", response_model=list[JobOut])
 def list_jobs(db: Session = Depends(get_db)):
-    stmt = select(Job).order_by(Job.created_at.desc())
+    stmt = select(Job).order_by(Job.created_at.desc(), Job.id.desc())
     return db.execute(stmt).scalars().all()
 
 
@@ -34,23 +34,21 @@ async def scrape_jobs_endpoint(payload: ScrapeRequest, db: Session = Depends(get
 
     found, site_errors = await scrape_for_roles(primary_role, location)
 
-    # Dedupe against both existing DB rows and duplicates within this batch (the same
-    # posting can surface under more than one of the 11 queried role titles). Checking
-    # the DB per-row without tracking in-batch keys would let a same-batch duplicate slip
-    # past the check and hit the UNIQUE constraint on commit, rolling back the whole batch.
-    existing_keys = {
-        (title, company, job_url)
-        for title, company, job_url in db.execute(select(Job.title, Job.company, Job.job_url)).all()
-    }
+    # Dedupe against existing DB rows and same-batch duplicates. Provider URLs
+    # can differ for the same posting, so treat a normalized URL OR normalized
+    # company/title pair as the duplicate key.
+    existing_keys = set()
+    for title, company, job_url in db.execute(select(Job.title, Job.company, Job.job_url)).all():
+        existing_keys.update(job_dedupe_keys({"title": title, "company": company, "job_url": job_url}))
 
     created = 0
     skipped = 0
     for item in found:
-        key = (item["title"], item["company"], item["job_url"])
-        if key in existing_keys:
+        item_keys = job_dedupe_keys(item)
+        if item_keys and existing_keys.intersection(item_keys):
             skipped += 1
             continue
-        existing_keys.add(key)
+        existing_keys.update(item_keys)
 
         db.add(
             Job(
@@ -72,7 +70,7 @@ async def scrape_jobs_endpoint(payload: ScrapeRequest, db: Session = Depends(get
     return ScrapeResult(
         primary_role=primary_role,
         location=location,
-        roles_queried=[primary_role] + [r for r in ALIGNED_ROLES if r != primary_role],
+        roles_queried=scrape_role_names(primary_role),
         total_found=len(found),
         created=created,
         skipped=skipped,
