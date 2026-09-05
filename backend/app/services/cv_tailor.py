@@ -265,10 +265,13 @@ Professional Experience still read substantially like the originals, your output
 - Treat the candidate as qualified only through the real roles, projects, tools, and workstreams
 supported by the Master CV. Use exact JD terminology aggressively when it fits those verified
 workstreams, even if the Master CV used broader or older wording.
-- Invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
-certifications, metrics, business domains, projects, responsibilities, regulated environments, and add
-specialty. When a JD requirement is absent,
-emphasize the closest experience claiming it directly.
+- Do not invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
+certifications, business domains.
+- When a JD requirement is absent, emphasize the closest truthful adjacent experience without
+claiming it directly.
+- Do not attach JD keywords mechanically with phrases like "-aligned", "-backed", or repeated
+technology-name modifiers. Reframe the full sentence so keywords describe a real workstream
+naturally.
 - Do NOT mention total years of experience anywhere in generated resume text. Phrases like
 "8 years of experience", "8+ years experience", "over 8 years", or "8-year background" are
 forbidden. The locked employment date ranges remain separate and are preserved by code.
@@ -1933,7 +1936,23 @@ def _bullet_keyword_candidates(original: str, keywords: list[str]) -> list[str]:
             "Selenium",
         ),
     )
-    return _keyword_list(candidates)
+    ordered = _keyword_list(candidates)
+    if any(
+        trigger in lowered
+        for trigger in ("container", "docker", "kubernetes", "workload", "ingress", "readiness")
+    ):
+        ordered = [
+            keyword
+            for _, keyword in sorted(
+                enumerate(ordered),
+                key=lambda pair: (
+                    0 if _provider_for_item(pair[1]) is not None else 1,
+                    1 if _is_database_keyword(pair[1]) else 0,
+                    pair[0],
+                ),
+            )
+        ]
+    return ordered
 
 
 def _required_keyword_bullet_count(original_bullets: list[str], target_keywords: list[str]) -> int:
@@ -2023,13 +2042,53 @@ def _bold_keywords(text: str, keywords: list[str], limit: int = 4) -> str:
     return result
 
 
+def _keyword_series_items(series: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", (series or "").replace("**", "").strip(" ,;"))
+    if not normalized:
+        return []
+    normalized = re.sub(r",?\s+and\s+", ",", normalized, flags=re.IGNORECASE)
+    return [item.strip(" ,;") for item in normalized.split(",") if item.strip(" ,;")]
+
+
+def _format_keyword_series(items: list[str]) -> str:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        cleaned = re.sub(r"\s+", " ", (item or "").replace("**", "").strip(" ,;"))
+        if not cleaned:
+            continue
+        key = _keyword_canonical_key(cleaned)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(cleaned)
+    if len(deduped) <= 1:
+        return deduped[0] if deduped else ""
+    if len(deduped) == 2:
+        return f"{deduped[0]} and {deduped[1]}"
+    return f"{', '.join(deduped[:-1])}, and {deduped[-1]}"
+
+
+def _add_keyword_to_series(series: str, keyword: str) -> str:
+    return _format_keyword_series(_keyword_series_items(series) + [keyword])
+
+
 def _normalize_stacked_keyword_phrases(text: str) -> str:
     def collapse_application_delivery(match: re.Match) -> str:
         raw_items = re.split(r"\s+and\s+", match.group(1))
         items = [item.strip() for item in raw_items if item.strip()]
         if len(items) < 3:
             return match.group(0)
-        return f"across {', '.join(items[:-1])}, and {items[-1]} application delivery"
+        return f"across {_format_keyword_series(items)} application delivery"
+
+    keyword_token = r"(?:\*\*)?[A-Za-z0-9+#./]+(?:\s+[A-Za-z0-9+#./]+){0,3}(?:\*\*)?"
+
+    def collapse_aligned_stack(match: re.Match) -> str:
+        items = re.findall(rf"({keyword_token})-aligned", match.group(1))
+        series = _format_keyword_series(items)
+        if not series:
+            return match.group(0)
+        return f"{match.group(2)} across {series}"
 
     text = re.sub(
         r"(\*\*[^*]+\*\*)\s+(\*\*[^*]+\*\*)\s+(\*\*[^*]+\*\*)\s+(coverage|delivery practices)",
@@ -2044,6 +2103,21 @@ def _normalize_stacked_keyword_phrases(text: str) -> str:
     text = re.sub(
         r"\bacross\s+((?:\*\*[^*]+\*\*|[A-Za-z0-9+#./-]+)(?:\s+and\s+(?:\*\*[^*]+\*\*|[A-Za-z0-9+#./-]+)){2,})\s+application delivery",
         collapse_application_delivery,
+        text,
+    )
+    text = re.sub(
+        rf"\b((?:{keyword_token}-aligned\s+){{2,}})(services?|applications?|microservices?|workloads?)\b",
+        collapse_aligned_stack,
+        text,
+    )
+    text = re.sub(
+        rf"\b({keyword_token})-aligned\s+(service readiness)\b",
+        lambda match: f"{match.group(2)} for {_format_keyword_series([match.group(1)])}",
+        text,
+    )
+    text = re.sub(
+        rf"\bfor\s+({keyword_token})-aligned\s+infrastructure outcomes\b",
+        lambda match: f"across {_format_keyword_series([match.group(1)])} infrastructure outcomes",
         text,
     )
     text = re.sub(r"\*\*Docker\*\*\s+\*\*Kubernetes\*\*", r"**Docker/Kubernetes**", text)
@@ -2349,8 +2423,22 @@ def _keyword_modifier(keyword: str) -> str:
     if lowered == "ci/cd":
         return "CI/CD"
     if "/" in keyword or " " in keyword:
-        return f"{keyword}-aligned"
+        return f"{keyword}-enabled"
     return f"{keyword}-backed"
+
+
+def _is_database_keyword(keyword: str) -> bool:
+    return _keyword_canonical_key(keyword) in {
+        "sql",
+        "sql server",
+        "postgresql",
+        "mysql",
+        "mongodb",
+        "nosql",
+        "dynamodb",
+        "rds",
+        "azure sql",
+    }
 
 
 def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
@@ -2369,28 +2457,44 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
             if coverage_match:
                 prefix = stripped[: coverage_match.start()]
                 existing = coverage_match.group(1).rstrip(", ")
-                return f"{prefix} with {existing}, {keyword_phrase} coverage."
+                return f"{prefix} with {_add_keyword_to_series(existing, keyword_phrase)} coverage."
         if phrase.endswith(" delivery practices"):
             keyword_phrase = phrase.removesuffix(" delivery practices").removeprefix("through ")
             delivery_match = re.search(r"\s+through\s+(.+?)\s+delivery practices\.?$", stripped, re.IGNORECASE)
             if delivery_match:
                 prefix = stripped[: delivery_match.start()]
                 existing = delivery_match.group(1).rstrip(", ")
-                return f"{prefix} through {existing}, {keyword_phrase} delivery practices."
+                return f"{prefix} through {_add_keyword_to_series(existing, keyword_phrase)} delivery practices."
         if phrase.endswith(" automation"):
             keyword_phrase = phrase.removesuffix(" automation").removeprefix("using ")
             automation_match = re.search(r"\s+using\s+(.+?)\s+automation\.?$", stripped, re.IGNORECASE)
             if automation_match:
                 prefix = stripped[: automation_match.start()]
                 existing = automation_match.group(1).rstrip(", ")
-                return f"{prefix} using {existing}, {keyword_phrase} automation."
+                return f"{prefix} using {_add_keyword_to_series(existing, keyword_phrase)} automation."
         if phrase.endswith(" application delivery"):
             keyword_phrase = phrase.removesuffix(" application delivery").removeprefix("across ")
-            app_match = re.search(r"\s+across\s+(.+?)\s+application delivery\.?$", stripped, re.IGNORECASE)
+            keyword_phrase = keyword_phrase.removeprefix("for ")
+            app_match = re.search(r"\s+(across|for)\s+(.+?)\s+application delivery\.?$", stripped, re.IGNORECASE)
             if app_match:
                 prefix = stripped[: app_match.start()]
-                existing = app_match.group(1).rstrip(", ")
-                return f"{prefix} across {existing}, {keyword_phrase} application delivery."
+                preposition = app_match.group(1).lower()
+                existing = app_match.group(2).rstrip(", ")
+                return f"{prefix} {preposition} {_add_keyword_to_series(existing, keyword_phrase)} application delivery."
+        if phrase.endswith(" application services"):
+            keyword_phrase = phrase.removesuffix(" application services").removeprefix("for ")
+            service_match = re.search(r"\s+for\s+(.+?)\s+application services\.?$", stripped, re.IGNORECASE)
+            if service_match:
+                prefix = stripped[: service_match.start()]
+                existing = service_match.group(1).rstrip(", ")
+                return f"{prefix} for {_add_keyword_to_series(existing, keyword_phrase)} application services."
+        if phrase.endswith(" infrastructure"):
+            keyword_phrase = phrase.removesuffix(" infrastructure").removeprefix("across ")
+            infrastructure_match = re.search(r"\s+across\s+(.+?)\s+infrastructure\.?$", stripped, re.IGNORECASE)
+            if infrastructure_match:
+                prefix = stripped[: infrastructure_match.start()]
+                existing = infrastructure_match.group(1).rstrip(", ")
+                return f"{prefix} across {_add_keyword_to_series(existing, keyword_phrase)} infrastructure."
         if stripped.endswith("."):
             return f"{stripped[:-1]} {phrase}."
         return f"{stripped} {phrase}"
@@ -2493,6 +2597,17 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
             )
         )
     if cloud_keyword:
+        existing_infrastructure_match = re.search(r"\bacross\s+(.+?)\s+infrastructure\b", text, re.IGNORECASE)
+        if existing_infrastructure_match:
+            candidate = re.sub(
+                r"\bacross\s+(.+?)\s+infrastructure\b",
+                lambda match: f"across {_add_keyword_to_series(match.group(1), keyword)} infrastructure",
+                text,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if candidate != text and _keyword_match_count(candidate, [keyword]):
+                return candidate
         replacements.extend(
             [
                 (
@@ -2502,10 +2617,6 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
                 (
                     re.compile(r"\b(infrastructure)\b", re.IGNORECASE),
                     lambda match: f"{_keyword_modifier(keyword)} {match.group(1)}",
-                ),
-                (
-                    re.compile(r"\b(workloads?)\b", re.IGNORECASE),
-                    lambda match: f"{keyword} {match.group(1)}",
                 ),
             ]
         )
@@ -2527,45 +2638,63 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
             ]
         )
     if language_keyword:
+        if _is_database_keyword(keyword) and _contains_any(
+            lowered_text,
+            ("application", "service", "software", "api", "workload", "readiness", "development"),
+        ):
+            return append_phrase(f"supporting {keyword} database connectivity")
         existing_automation_match = re.search(r"\busing\s+(.+?)\s+automation\b", text, re.IGNORECASE)
         if existing_automation_match:
             candidate = re.sub(
                 r"\busing\s+(.+?)\s+automation\b",
-                lambda match: f"using {match.group(1).rstrip(', ')} and {keyword} automation",
+                lambda match: f"using {_add_keyword_to_series(match.group(1), keyword)} automation",
                 text,
                 count=1,
                 flags=re.IGNORECASE,
             )
             if candidate != text and _keyword_match_count(candidate, [keyword]):
                 return candidate
-        existing_app_match = re.search(r"\bacross\s+(.+?)\s+application delivery\b", text, re.IGNORECASE)
+        existing_app_match = re.search(r"\b(?:across|for)\s+(.+?)\s+application delivery\b", text, re.IGNORECASE)
         if existing_app_match:
             candidate = re.sub(
-                r"\bacross\s+(.+?)\s+application delivery\b",
-                lambda match: f"across {match.group(1).rstrip(', ')} and {keyword} application delivery",
+                r"\b(across|for)\s+(.+?)\s+application delivery\b",
+                lambda match: f"{match.group(1)} {_add_keyword_to_series(match.group(2), keyword)} application delivery",
                 text,
                 count=1,
                 flags=re.IGNORECASE,
             )
             if candidate != text and _keyword_match_count(candidate, [keyword]):
                 return candidate
+        if _contains_any(
+            lowered_text,
+            ("application", "deployment", "delivery", "service", "software", "development", "enterprise", "pipeline", "release"),
+        ):
+            if re.search(r"\b(services?|applications?|microservices?)\s+using\b", text, re.IGNORECASE):
+                candidate = re.sub(
+                    r"\b(services?|applications?|microservices?)\s+using\b",
+                    lambda match: f"{match.group(1)} for {keyword} application delivery using",
+                    text,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+                if candidate != text and _keyword_match_count(candidate, [keyword]):
+                    return candidate
+            return append_phrase(f"across {keyword} application delivery")
+        if _contains_any(lowered_text, ("automated", "automation", "script", "tool", "api", "administration", "operations")):
+            return append_phrase(f"using {keyword} automation")
         replacements.extend(
             [
                 (
                     re.compile(r"\b(automation)\b", re.IGNORECASE),
-                    lambda match: f"{keyword}-backed {match.group(1)}",
+                    lambda match: f"{keyword} {match.group(1)}",
                 ),
                 (
                     re.compile(r"\b(operations|administration)\b", re.IGNORECASE),
-                    lambda match: f"{keyword}-enabled {match.group(1)}",
-                ),
-                (
-                    re.compile(r"\b(enterprise\s+applications|applications?|microservices?|services?)\b", re.IGNORECASE),
-                    lambda match: f"{keyword}-aligned {match.group(1)}",
+                    lambda match: f"{match.group(1)} using {keyword}",
                 ),
                 (
                     re.compile(r"\b(development|delivery)\b", re.IGNORECASE),
-                    lambda match: f"{keyword}-focused {match.group(1)}",
+                    lambda match: f"{match.group(1)} for {keyword}",
                 ),
             ]
         )
@@ -2583,11 +2712,11 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
         ("pipeline", "deployment", "release", "rollback", "platform", "artifact", "registry"),
     ):
         return append_phrase(f"through {keyword} delivery practices")
-    if _keyword_matches_allowed_terms(keyword, _CLOUD_CATEGORY_ALLOWED_HINTS) and _contains_any(
+    if cloud_keyword and _contains_any(
         lowered_text,
         ("cloud", "architecture", "infrastructure", "workload", "network", "scalable"),
     ):
-        return append_phrase(f"for {keyword}-aligned infrastructure outcomes")
+        return append_phrase(f"across {keyword} infrastructure")
     if _keyword_matches_allowed_terms(keyword, _MONITORING_SECURITY_CATEGORY_ALLOWED_HINTS) and _contains_any(
         lowered_text,
         ("reliability", "uptime", "mttr", "monitor", "incident", "security", "controls"),
@@ -2748,7 +2877,7 @@ def _rewrite_experience_bullet(
         ]
         bullet_keywords = fresh_keywords if len(fresh_keywords) >= 3 else fresh_keywords + reused_keywords
 
-    target_bullet_keyword_count = min(6, len(bullet_keywords))
+    target_bullet_keyword_count = min(4, len(bullet_keywords))
     for keyword in bullet_keywords:
         if _keyword_match_count(rewritten, bullet_keywords) >= target_bullet_keyword_count:
             break
@@ -3013,35 +3142,41 @@ async def _request_tailored_payload(settings, prompt: str, temperature: float) -
     if not api_key:
         raise LLMExecutionError("OPENAI_API_KEY is missing; set it in backend/.env.")
 
+    # Preserve medium reasoning for Terra and Astra; omit sampling controls.
+    generation_options = (
+        {"reasoning_effort": "medium"}
+        if settings.openai_model.startswith(("gpt-5.6-terra", "gpt-6-astra"))
+        else {"temperature": temperature}
+    )
+    request_context = f"model='{settings.openai_model}', options={generation_options}"
     try:
         async with AsyncOpenAI(api_key=api_key, timeout=180.0, max_retries=0) as client:
             completion = await client.chat.completions.create(
                 model=settings.openai_model,
                 messages=_chat_messages(prompt),
                 response_format={"type": "json_object"},
-                temperature=temperature,
+                **generation_options,
             )
     except APIError as exc:
         raise LLMExecutionError(
-            f"OpenAI API request failed for model '{settings.openai_model}' "
-            f"at temperature={temperature}: {exc}"
+            f"OpenAI API request failed ({request_context}): {exc}"
         ) from exc
 
     try:
         raw_output = (completion.choices[0].message.content or "").strip()
     except (AttributeError, IndexError) as exc:
         raise LLMExecutionError(
-            f"OpenAI response did not include assistant content at temperature={temperature}: {exc}"
+            f"OpenAI response did not include assistant content ({request_context}): {exc}"
         ) from exc
 
     if not raw_output:
-        raise LLMExecutionError(f"OpenAI returned an empty response at temperature={temperature}.")
+        raise LLMExecutionError(f"OpenAI returned an empty response ({request_context}).")
 
     try:
         parsed_json = json.loads(raw_output)
     except json.JSONDecodeError as exc:
         raise TailoringError(
-            f"OpenAI did not return valid tailored JSON at temperature={temperature}: {exc}. "
+            f"OpenAI did not return valid tailored JSON ({request_context}): {exc}. "
             f"Raw response starts with: {raw_output[:500]!r}"
         ) from exc
 
@@ -3049,7 +3184,7 @@ async def _request_tailored_payload(settings, prompt: str, temperature: float) -
         return _TailoredPayload.model_validate(parsed_json)
     except ValidationError as exc:
         raise TailoringError(
-            f"OpenAI JSON response did not match the expected shape at temperature={temperature}: {exc}"
+            f"OpenAI JSON response did not match the expected shape ({request_context}): {exc}"
         ) from exc
 
 
@@ -3101,7 +3236,7 @@ async def tailor_cv(
     """Returns a tailored result or a non-cacheable fallback result.
 
     The OpenAI model gets one tailoring attempt, then one retry at the same
-    requested temperature if the model returns malformed JSON or fails strict
+    generation settings if the model returns malformed JSON or fails strict
     output validation. OpenAI execution failures fall back to clean Master CV
     text after logging the exact exception.
     """
@@ -3151,7 +3286,7 @@ async def tailor_cv(
         except TailoringError as exc:
             if attempt == 1:
                 logging.warning(
-                    "CV tailoring attempt 1 failed; retrying once with temperature=0.3. Exact error: %s",
+                    "CV tailoring attempt 1 failed; retrying once with the same model settings. Exact error: %s",
                     exc,
                 )
                 continue

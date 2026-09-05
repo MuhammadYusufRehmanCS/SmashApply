@@ -17,6 +17,7 @@ from app.services.cv_tailor import (
     _prepare_summary_text,
     _reconstruct_tailored_text,
     _render_technical_expertise,
+    _rewrite_experience_bullet,
     _split_experience_entries,
     _split_technical_expertise,
     _validate_tailored_payload,
@@ -26,7 +27,7 @@ from app.services.text_sections import is_bullet_line
 
 
 class CvTailorTests(unittest.TestCase):
-    def test_blank_openai_model_falls_back_to_gpt_4o_mini(self):
+    def test_blank_openai_model_falls_back_to_default(self):
         self.assertEqual(Settings(_env_file=None, openai_model="").openai_model, DEFAULT_OPENAI_MODEL)
 
     def test_replacement_character_bullets_are_editable(self):
@@ -68,6 +69,36 @@ class CvTailorTests(unittest.TestCase):
         self.assertIn("Do not keyword-stuff", SYSTEM_PROMPT)
         self.assertIn("Do not invent experience to satisfy the posting", SYSTEM_PROMPT)
         self.assertIn("emphasize the closest truthful adjacent experience", SYSTEM_PROMPT)
+
+    def test_rewrite_does_not_stack_aligned_language_keywords(self):
+        rewritten = _rewrite_experience_bullet(
+            "Managed the lifecycle of containerized services using ACR/ECR and Nexus "
+            "for secure artifact management.",
+            [".NET", "Java", "C#", "React", "Node.js", "TypeScript", "ACR/ECR", "Nexus"],
+        )
+        plain = rewritten.replace("**", "")
+
+        self.assertNotIn("-aligned", plain)
+        self.assertNotRegex(plain, r"(?:\S+-aligned\s+){2,}")
+        self.assertIn("containerized services", plain)
+        self.assertIn("services for .NET and Java application delivery", plain)
+        self.assertIn("ACR/ECR", plain)
+        self.assertIn("Nexus", plain)
+
+    def test_rewrite_keeps_cloud_database_keywords_in_readable_sentence(self):
+        rewritten = _rewrite_experience_bullet(
+            "Deployed Docker/Kubernetes workloads enabling 10-30s service readiness "
+            "with scalable ingress routing.",
+            ["AWS", "Azure", "Microsoft SQL Server", "Docker", "Kubernetes"],
+        )
+        plain = rewritten.replace("**", "")
+
+        self.assertNotIn("-aligned", plain)
+        self.assertNotIn("Docker/Kubernetes AWS Azure", plain)
+        self.assertNotIn("SQL Server application delivery", plain)
+        self.assertIn("service readiness", plain)
+        self.assertIn("Docker/Kubernetes", plain)
+        self.assertIn("across AWS and Azure infrastructure", plain)
 
     def test_devops_platforms_filters_cloud_service_duplicates(self):
         rendered = _render_technical_expertise(

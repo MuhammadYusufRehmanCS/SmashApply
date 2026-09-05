@@ -4,7 +4,7 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_OPENAI_MODEL = "gpt-5.6-terra"
 BACKEND_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 

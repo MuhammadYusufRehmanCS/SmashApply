@@ -1,8 +1,8 @@
 # SmashApply
 
 Local Cloud/DevOps job-application engine: live-scrapes job boards for a role plus 10 aligned
-titles, tailors your Master CV's wording to each posting with a local LLM (Ollama), and generates
-an ATS-friendly PDF that mirrors your Master CV's original layout — no paid cloud APIs, no managed
+titles, tailors your Master CV's wording to each posting with OpenAI GPT-5.6 Terra, and generates
+an ATS-friendly PDF that mirrors your Master CV's original layout — an OpenAI API key is required; no managed
 databases.
 
 ## Stack
@@ -10,7 +10,7 @@ databases.
 - **Backend:** Python / FastAPI / SQLAlchemy / SQLite
 - **Layout parsing:** `pypdf` (text) + `pdfplumber` (font/position metadata)
 - **Scraping:** `python-jobspy` against LinkedIn, Indeed, Glassdoor, ZipRecruiter
-- **Tailoring:** local Ollama endpoint (`llama3` by default)
+- **Tailoring:** OpenAI GPT-5.6 Terra (`gpt-5.6-terra`) with medium reasoning effort
 - **PDF generation:** `reportlab`, driven by the parsed layout profile
 - **Frontend:** Next.js (App Router) / Tailwind CSS
 - **Infra:** `docker-compose.yml` for one-command startup
@@ -34,7 +34,7 @@ smashapply/
 │   │       ├── cv_layout.py       # pdfplumber+pypdf layout profile extraction
 │   │       ├── text_sections.py   # shared heading/bullet detection heuristics
 │   │       ├── job_scraper.py     # jobspy scraping across 11 role titles
-│   │       ├── cv_tailor.py       # Ollama-backed keyword extraction + rewrite
+│   │       ├── cv_tailor.py       # OpenAI-backed keyword extraction + rewrite
 │   │       └── pdf_generator.py   # reportlab ATS PDF mirroring the layout profile
 │   ├── requirements.txt
 │   ├── Dockerfile
@@ -73,8 +73,7 @@ uvicorn app.main:app --reload
 API serves on `http://127.0.0.1:8000` (docs at `/docs`). SQLite data lives in
 `backend/data/smashapply.db`, created automatically on first run.
 
-**Ollama setup:** install [Ollama](https://ollama.com), run `ollama pull llama3`, and make sure
-`ollama serve` is running before using Tailor/Download.
+**OpenAI setup:** set `OPENAI_API_KEY` in `backend/.env`. The default model is `gpt-5.6-terra`, configurable through `OPENAI_MODEL`. Restart the backend after changing these settings. API usage is billed separately; your project must have access to the selected model. Existing saved CVs must be tailored again to use the new model.
 
 ### 2. Frontend
 
@@ -94,7 +93,7 @@ Dashboard serves on `http://localhost:3000`.
 2. Set a Job Title (defaults to "Cloud Engineer / DevOps Engineer") and Location (defaults to
    "Remote"), click **Scrape Jobs**. This queries the primary title plus the 10 aligned Cloud/DevOps
    titles in `app/roles.py` across all four job boards.
-3. Click **Tailor & Download CV** on any row: Ollama extracts the job's keywords, rewrites your
+3. Click **Tailor & Download CV** on any row: OpenAI extracts the job's keywords, rewrites your
    CV's bullets to mirror them (facts unchanged), and a PDF matching your Master CV's layout
    downloads automatically.
 
