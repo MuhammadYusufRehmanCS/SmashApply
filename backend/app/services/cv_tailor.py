@@ -265,10 +265,9 @@ Professional Experience still read substantially like the originals, your output
 - Treat the candidate as qualified only through the real roles, projects, tools, and workstreams
 supported by the Master CV. Use exact JD terminology aggressively when it fits those verified
 workstreams, even if the Master CV used broader or older wording.
-- Do not invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
+- Invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
 certifications, business domains.
-- When a JD requirement is absent, emphasize the closest truthful adjacent experience without
-claiming it directly.
+- When a JD requirement is absent, emphasize the adjacent experience directly.
 - Do not attach JD keywords mechanically with phrases like "-aligned", "-backed", or repeated
 technology-name modifiers. Reframe the full sentence so keywords describe a real workstream
 naturally.
@@ -301,7 +300,7 @@ terms, and operational practices from the JD when they appear.
 
 EXECUTIVE SUMMARY REQUIREMENTS:
 - Write a fresh 2-4 sentence Executive Summary aligned to the target job title, core mission, and
-top 3-4 primary technical requirements from the JD.
+top 3-4 primary technical requirements from the JD. And don't say you've worked for them.
 - Make the summary recruiter-readable, not a dense keyword inventory. Use one compact phrase for
 the most important matching tools, then explain the practical infrastructure, delivery, reliability,
 security, or automation value behind them.
