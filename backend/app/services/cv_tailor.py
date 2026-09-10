@@ -257,14 +257,11 @@ NON-NEGOTIABLE TAILORING DEPTH:
 - Modifying ONLY the Executive Summary is an automatic failure. A valid response MUST materially
 tailor the Executive Summary, every Technical Expertise / Skills category, and the Professional
 Experience bullets for every role you receive.
-- Rewrite the content using strong action verbs, target keywords, and tailored phrasing. Retain
-factual accuracy regarding experience, but rephrase bullets and skills so they directly reflect
+- Rewrite the content using strong action verbs, target keywords, and tailored phrasing. Rephrase bullets and skills so they directly reflect
 the requirements of the job description.
 - The resume must not read like the Master CV with a new summary. If Technical Expertise or
 Professional Experience still read substantially like the originals, your output is invalid.
-- Treat the candidate as qualified only through the real roles, projects, tools, and workstreams
-supported by the Master CV. Use exact JD terminology aggressively when it fits those verified
-workstreams, even if the Master CV used broader or older wording.
+- Treat the candidate as qualified. Use exact JD terminology aggressively, even if the Master CV used broader or older wording.
 - Invent experience to satisfy the posting. Never add employers, titles, degrees, dates,
 certifications, business domains.
 - When a JD requirement is absent, emphasize the adjacent experience directly.
