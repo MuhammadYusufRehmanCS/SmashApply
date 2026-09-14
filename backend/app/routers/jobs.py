@@ -11,9 +11,10 @@ from app.database import get_db
 from app.models import Job, MasterCV
 from app.roles import PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
-from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv
+from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv, has_reframed_experience
 from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names
-from app.services.pdf_generator import build_ats_pdf
+from app.services.pdf_generator import CVOverflowError, build_ats_pdf
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -101,8 +102,9 @@ def _get_master_cv_or_400(db: Session) -> MasterCV:
     return cv
 
 
-def _has_cached_tailoring(job: Job) -> bool:
-    return bool((job.tailored_cv or "").strip() and (job.tailored_keywords or "").strip())
+def _has_cached_tailoring(job: Job, cv: MasterCV | None = None) -> bool:
+    present = bool((job.tailored_cv or "").strip() and (job.tailored_keywords or "").strip())
+    return present and (cv is None or has_reframed_experience(job.tailored_cv, json.loads(cv.sections_json)))
 
 
 async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bool = False) -> TailorCVResult:
@@ -163,7 +165,7 @@ async def tailor_job(job_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
 
     cv = _get_master_cv_or_400(db)
-    result = await _run_tailor(job, cv, db)
+    result = await _run_tailor(job, cv, db, allow_fallback=True)
 
     return TailorResult(job_id=job.id, keywords=result.keywords, tailored_cv=result.text)
 
@@ -188,12 +190,16 @@ async def download_cv(job_id: int, db: Session = Depends(get_db)):
 
     cv = _get_master_cv_or_400(db)
     cv_text = job.tailored_cv
-    if not _has_cached_tailoring(job):
+    template_data = None
+    if not _has_cached_tailoring(job, cv):
         result = await _run_tailor(job, cv, db, allow_fallback=True)
         cv_text = result.text
+        template_data = result.template_data
 
-    layout = json.loads(cv.layout_json)
-    pdf_bytes = build_ats_pdf(cv_text or cv.raw_text, layout)
+    try:
+        pdf_bytes = await run_in_threadpool(build_ats_pdf, template_data or cv_text or cv.raw_text)
+    except CVOverflowError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # Dynamically fetch and clean this job's company name so every download is
     # named for its target company (e.g. MYR_Google.pdf, MYR_Amazon.pdf) instead

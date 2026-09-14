@@ -8,7 +8,7 @@ from app.services.cv_tailor import _request_tailored_payload
 
 class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
     async def test_reasoning_and_legacy_temperature_requests(self):
-        for model in ("gpt-5.6-terra", "gpt-6-astra", "gpt-4o-mini"):
+        for model in ("gpt-5.6-terra", "gpt-6-astra", "gpt-4o"):
             with self.subTest(model=model):
                 client = AsyncMock()
                 client.chat.completions.create.return_value = SimpleNamespace(
@@ -24,7 +24,12 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.summary, "Tailored summary")
                 request = client.chat.completions.create.call_args.kwargs
                 self.assertEqual(request["model"], model)
-                self.assertEqual(request["response_format"], {"type": "json_object"})
+                self.assertEqual(request["response_format"]["type"], "json_schema")
+                self.assertTrue(request["response_format"]["json_schema"]["strict"])
+                schema = request["response_format"]["json_schema"]["schema"]
+                self.assertIn("role_title", schema["required"])
+                self.assertNotIn("header", schema["properties"])
+                self.assertNotIn("contact", schema["properties"])
                 if model in ("gpt-5.6-terra", "gpt-6-astra"):
                     self.assertEqual(request["reasoning_effort"], "medium")
                     self.assertNotIn("temperature", request)

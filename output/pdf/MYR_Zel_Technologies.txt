@@ -1,0 +1,35 @@
+MUHAMMAD YUSUF | SYSTEM ENGINEER VBP | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION
+A.S Computer Science & Engineering | Bay Area, CA | rmyusufrehman@gmail.com | +1 (424) 305-8206 | Citizenship: United States
+
+EXECUTIVE SUMMARY
+**Cloud and systems engineer** supporting secure, reliable **AWS and Azure infrastructure**, CI/CD, and production operations. Applies **Terraform, Ansible, Python, and Bash** to automate configuration and deployments, improve system reliability, and resolve incidents. Experienced with container platforms, monitoring, and cross-functional delivery.
+
+TECHNICAL EXPERTISE
+- Cloud & Infrastructure: AWS (EKS, IAM, VPC, Lambda, API Gateway, ALB, EventBridge, CloudWatch), Azure (VNet, Entra ID, Azure Monitor, Functions, ARM/Bicep, Azure SQL), high availability, disaster recovery, cloud migration, DNS, SSL/TLS
+- DevOps & Platforms: Configuration management, Terraform, Ansible, Docker, Kubernetes, Helm, GitOps (ArgoCD/FluxCD), CI/CD (Jenkins, GitHub Actions, SonarQube)
+- Monitoring & Security: Prometheus, Grafana, CloudWatch, logging, incident response, SLO/error budgeting, security
+- Languages & Tools: Linux & Windows Server Administration, PowerShell, Python, Bash, Git, JavaScript/Node.js, Golang
+
+PROFESSIONAL EXPERIENCE
+Cloud & DevOps Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present
+Supported production multi-cloud infrastructure and CI/CD workflows
+- Engineered high-availability **AWS/Azure infrastructure**, maintaining **99.9% uptime** for production workloads.
+- Optimized GitHub Actions/Jenkins pipelines with **SonarQube quality gates**, enabling **< 60s deployments** and automated rollbacks.
+- Automated **artifact management and release pipelines** to strengthen deployment consistency and traceability.
+- Automated infrastructure with **Terraform, Ansible, Python, and Bash** to improve reliability and reduce MTTR.
+
+Cloud Engineer | Ventera Group | Bay Area, CA | Aug 2023 – Jan 2025
+Built scalable cloud platforms and deployment systems for enterprise applications
+- Managed **containerized services** and secured artifact workflows using ACR/ECR and Nexus.
+- Improved deployment efficiency by **60%+** through CI/CD pipeline automation while reducing release errors.
+- Built reusable **Terraform modules** to provision complete environments in **5–10 minutes**.
+- Deployed **Docker/Kubernetes** workloads with scalable ingress routing, achieving **10–30s service readiness**.
+
+EDUCATION & PROFESSIONAL DEVELOPMENT
+- A.S. Computer Science & Engineering, Los Angeles Harbor College (2025–2027)
+- Certifications & Tooling: AWS SAA | AWS CCP | Terraform | GitHub Actions | Jenkins | Docker | Kubernetes | CloudWatch
+- Core Strengths: Ownership, cross-functional collaboration, problem-solving, systems thinking
+
+ADDITIONAL
+- Languages: English (Fluent) | Urdu (Fluent) | Hindi (Conversational)
+- Citizenship: United States

@@ -9,5 +9,6 @@ python-dotenv==1.0.1
 python-multipart==0.0.20
 pypdf==5.1.0
 pdfplumber==0.11.10
-reportlab==5.0.1
+Jinja2==3.1.6
+playwright==1.62.0
 python-jobspy==1.1.82

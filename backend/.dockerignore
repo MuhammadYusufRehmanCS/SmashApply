@@ -1,4 +1,5 @@
 .venv
+.playwright
 venv
 __pycache__
 *.db

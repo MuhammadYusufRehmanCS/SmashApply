@@ -8,11 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import DEFAULT_OPENAI_MODEL, Settings
 from app.models import MasterCV
-from app.routers.jobs import _has_cached_tailoring
+from app.routers.jobs import _has_cached_tailoring, tailor_job
 from app.services.cv_tailor import (
     LLMExecutionError,
     SYSTEM_PROMPT,
     TailoringError,
+    TailorCVResult,
     _TailoredPayload,
     _prepare_summary_text,
     _reconstruct_tailored_text,
@@ -57,18 +58,14 @@ class CvTailorTests(unittest.TestCase):
         )
         self.assertEqual(summary, "Cloud Engineer aligning AWS, Terraform, and CI/CD delivery.")
 
-    def test_system_prompt_forbids_summary_only_tailoring(self):
-        self.assertIn("Modifying ONLY the Executive Summary is an automatic failure", SYSTEM_PROMPT)
-        self.assertIn(
-            "Rewrite the content using strong action verbs, target keywords, and tailored phrasing.",
-            SYSTEM_PROMPT,
-        )
+    def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
+        self.assertIn("ALL Experience Bullets", SYSTEM_PROMPT)
+        self.assertIn("Do not just swap 1-2 words", SYSTEM_PROMPT)
+        self.assertIn("Never add, delete, merge, or split bullets/categories", SYSTEM_PROMPT)
 
-    def test_system_prompt_requires_recruiter_readable_truthful_tailoring(self):
-        self.assertIn("ATS-aware, recruiter-readable", SYSTEM_PROMPT)
-        self.assertIn("Do not keyword-stuff", SYSTEM_PROMPT)
-        self.assertIn("Do not invent experience to satisfy the posting", SYSTEM_PROMPT)
-        self.assertIn("emphasize the closest truthful adjacent experience", SYSTEM_PROMPT)
+    def test_system_prompt_requires_readable_keyword_use(self):
+        self.assertIn("Readability takes priority over keyword density", SYSTEM_PROMPT)
+        self.assertIn("DO NOT keyword-stuff", SYSTEM_PROMPT)
 
     def test_rewrite_does_not_stack_aligned_language_keywords(self):
         rewritten = _rewrite_experience_bullet(
@@ -236,218 +233,94 @@ class CvTailorTests(unittest.TestCase):
 
 
 class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tailor_cv_retries_once_then_uses_deterministic_tailoring(self):
-        sections = [
+    def setUp(self):
+        self.sections = [
             {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
             {"name": "Executive Summary", "content": "Original summary."},
-            {
-                "name": "Technical Expertise",
-                "content": "\ufffd Cloud & Infrastructure: AWS, Azure\n"
-                "\ufffd DevOps & Platforms: Terraform, Docker",
-            },
-            {
-                "name": "Professional Experience",
-                "content": "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
-                "\ufffd Built CI/CD pipelines.",
-            },
-            {"name": "Education", "content": "\ufffd A.S. Computer Science, Los Angeles Harbor College"},
+            {"name": "Professional Experience", "content":
+             "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
+             "- Designed and governed high-availability AWS/Azure architectures, ensuring 99.9% uptime for production workloads.\n"
+             "- Automated infrastructure with Terraform, Ansible, Python, and Bash to improve reliability and MTTR."},
+            {"name": "Education", "content": "- A.S. Computer Science, Los Angeles Harbor College"},
         ]
-        master_cv = MasterCV(sections_json=json.dumps(sections), raw_text="", layout_json="{}")
-
-        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.side_effect = [
-                TailoringError("malformed json"),
-                TailoringError("strict bullet count validation failed"),
-            ]
-
-            result = await tailor_cv(
-                master_cv,
-                "Cloud Engineer",
-                "Acme",
-                "Need Terraform, Docker, CI/CD, and AWS.",
-                allow_fallback=True,
-            )
-
-        self.assertEqual(result.keywords, ["Terraform", "Docker", "CI/CD", "AWS"])
-        self.assertTrue(result.cacheable)
-        self.assertFalse(result.used_fallback)
-        self.assertEqual(request.await_count, 2)
-        self.assertEqual([call.args[2] for call in request.await_args_list], [0.3, 0.3])
-        self.assertIn(
-            "Cloud Engineer focused on cloud infrastructure, automation, and production delivery "
-            "using Terraform, Docker, CI/CD, AWS",
-            result.text,
-        )
-        self.assertIn("MUHAMMAD YUSUF | CLOUD ENGINEER", result.text)
-        self.assertIn(
-            "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present",
-            result.text,
-        )
-        self.assertIn("A.S. Computer Science, Los Angeles Harbor College", result.text)
-        self.assertIn("Engineered **CI/CD** pipelines.", result.text)
-
-    async def test_retry_repairs_unchanged_skills_and_bullets(self):
-        sections = [
-            {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
-            {"name": "Executive Summary", "content": "Original summary."},
-            {
-                "name": "Technical Expertise",
-                "content": "\ufffd Cloud & Infrastructure: AWS, Azure\n"
-                "\ufffd DevOps & Platforms: Terraform, Docker",
-            },
-            {
-                "name": "Professional Experience",
-                "content": "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
-                "\ufffd Built CI/CD pipelines.",
-            },
+        self.master = MasterCV(sections_json=json.dumps(self.sections), raw_text="", layout_json="{}")
+        self.bullets = [
+            "Sustained **99.9% uptime** by engineering resilient AWS/Azure systems for dependable production service delivery.",
+            "Reduced recovery effort through repeatable provisioning and operational scripts built with Terraform, Ansible, Python, and Bash.",
         ]
-        master_cv = MasterCV(sections_json=json.dumps(sections), raw_text="", layout_json="{}")
-        retry_payload = _TailoredPayload(
-            keywords=["Terraform", "CI/CD", "AWS"],
-            summary="Cloud automation engineer focused on AWS-backed Terraform and CI/CD delivery.",
-            technical_expertise=["**AWS**, Azure", "**Terraform**, Docker"],
-            experience_bullets=[["Built CI/CD pipelines."]],
-        )
 
-        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.side_effect = [
-                TailoringError("malformed json"),
-                retry_payload,
-            ]
+    def payload(self):
+        return _TailoredPayload(summary="Cloud engineer focused on reliable service operations.",
+                                experience_bullets=[self.bullets.copy()])
 
-            result = await tailor_cv(
-                master_cv,
-                "Cloud Engineer",
-                "Acme",
-                "Need Terraform, Docker, CI/CD, and AWS.",
-            )
-
-        self.assertEqual(request.await_count, 2)
-        self.assertTrue(result.cacheable)
-        self.assertFalse(result.used_fallback)
-        self.assertIn("Cloud automation engineer", result.text)
-        self.assertIn("**Terraform**, **Docker**, **CI/CD**", result.text)
-        self.assertIn("Engineered **CI/CD** pipelines.", result.text)
-
-    async def test_parseable_payload_is_repaired_before_validation(self):
-        sections = [
-            {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
-            {"name": "Executive Summary", "content": "Original summary."},
-            {
-                "name": "Technical Expertise",
-                "content": "\ufffd Cloud & Infrastructure: AWS, Azure\n"
-                "\ufffd DevOps & Platforms: Terraform, Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins",
-            },
-            {
-                "name": "Professional Experience",
-                "content": "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
-                "\ufffd Designed and governed high-availability AWS/Azure architectures.\n"
-                "\ufffd Optimized GitHub Actions/Jenkins pipelines with SonarQube quality gates.\n"
-                "\ufffd Built automated artifact management and release pipelines.\n"
-                "\ufffd Automated infrastructure with Terraform, Ansible, Python, and Bash.",
-            },
-        ]
-        master_cv = MasterCV(sections_json=json.dumps(sections), raw_text="", layout_json="{}")
-        weak_payload = _TailoredPayload(
-            keywords=[],
-            summary="Cloud automation engineer focused on production delivery.",
-            technical_expertise=["AWS, Azure", "Terraform, Docker, Kubernetes, CI/CD, GitHub Actions, Jenkins"],
-            experience_bullets=[
-                [
-                    "Designed and governed high-availability AWS/Azure architectures.",
-                    "Optimized GitHub Actions/Jenkins pipelines with SonarQube quality gates.",
-                    "Built automated artifact management and release pipelines.",
-                    "Automated infrastructure with Terraform, Ansible, Python, and Bash.",
-                ]
-            ],
-        )
-
-        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.return_value = weak_payload
-
-            result = await tailor_cv(
-                master_cv,
-                "Cloud Engineer",
-                "Acme",
-                "Need AWS, Terraform, Docker, Kubernetes, CI/CD, release automation, and SonarQube.",
-            )
-
+    async def test_model_bullets_survive_without_stock_replacement(self):
+        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request, \
+             patch("app.services.cv_tailor._keywords_from_text", return_value=[]), \
+             patch("app.services.cv_tailor._repair_tailored_payload") as repair:
+            request.return_value = self.payload()
+            result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Reliable service operations")
         self.assertEqual(request.await_count, 1)
+        repair.assert_not_called()
+        for bullet in self.bullets:
+            self.assertIn(bullet, result.text)
         self.assertTrue(result.cacheable)
         self.assertFalse(result.used_fallback)
-        self.assertIn("Architected and governed", result.text)
-        self.assertIn("**CI/CD** pipelines", result.text)
-        self.assertIn("Codified and automated infrastructure with **Terraform**", result.text)
+        self.assertIn("Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present", result.text)
+        self.assertIn("A.S. Computer Science, Los Angeles Harbor College", result.text)
 
-    async def test_tailor_cv_without_fallback_uses_deterministic_tailoring_when_retry_has_no_json(self):
-        sections = [
-            {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
-            {"name": "Executive Summary", "content": "Original summary."},
-            {
-                "name": "Technical Expertise",
-                "content": "\ufffd Cloud & Infrastructure: AWS, Azure\n"
-                "\ufffd DevOps & Platforms: Terraform, Docker",
-            },
-            {
-                "name": "Professional Experience",
-                "content": "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
-                "\ufffd Built CI/CD pipelines.",
-            },
-        ]
-        master_cv = MasterCV(sections_json=json.dumps(sections), raw_text="", layout_json="{}")
-
-        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.side_effect = [
-                TailoringError("malformed json"),
-                TailoringError("malformed retry"),
-            ]
-
-            result = await tailor_cv(
-                master_cv,
-                "Cloud Engineer",
-                "Acme",
-                "Need Terraform, Docker, CI/CD, and AWS.",
-            )
-
+    async def test_superficial_verb_swap_retries_with_feedback(self):
+        weak = self.payload()
+        weak.experience_bullets[0][0] = "Architected and governed high-availability AWS/Azure architectures, ensuring 99.9% uptime for production workloads."
+        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request, \
+             patch("app.services.cv_tailor._keywords_from_text", return_value=[]):
+            request.side_effect = [weak, self.payload()]
+            result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Reliable service operations")
         self.assertEqual(request.await_count, 2)
-        self.assertTrue(result.cacheable)
-        self.assertFalse(result.used_fallback)
-        self.assertIn(
-            "Cloud Engineer focused on cloud infrastructure, automation, and production delivery "
-            "using Terraform, Docker, CI/CD, AWS",
-            result.text,
-        )
-        self.assertIn("Engineered **CI/CD** pipelines.", result.text)
+        self.assertIn("previous response failed validation", request.await_args_list[1].args[1])
+        self.assertIn(self.bullets[0], result.text)
 
-    async def test_openai_execution_error_falls_back_without_raw_failure(self):
-        sections = [
-            {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},
-            {"name": "Executive Summary", "content": "Original summary."},
-            {
-                "name": "Professional Experience",
-                "content": "Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present\n"
-                "\ufffd Built CI/CD pipelines.",
-            },
-        ]
-        master_cv = MasterCV(sections_json=json.dumps(sections), raw_text="", layout_json="{}")
+    async def test_failed_retries_return_tailored_fallback_when_enabled(self):
+        for failure in [TailoringError("invalid JSON"), LLMExecutionError("API unavailable")]:
+            with self.subTest(failure=type(failure).__name__), \
+                 patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
+                request.side_effect = failure
+                result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
+                self.assertEqual(request.await_count, 2)
+                self.assertTrue(result.used_fallback)
+                self.assertFalse(result.cacheable)
+                self.assertNotIn("Original summary.", result.text)
+                self.assertIn("Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present", result.text)
 
-        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-            request.side_effect = [
-                LLMExecutionError("OPENAI_API_KEY is missing; set it in backend/.env."),
-                LLMExecutionError("OPENAI_API_KEY is missing; set it in backend/.env."),
-            ]
+    async def test_tailor_route_requests_fallback_on_retry_failure(self):
+        job = type("Job", (), {"id": 1, "title": "Systems Engineer", "company": "Acme", "description": "Service operations"})()
+        fake_db = type("FakeDB", (), {"get": lambda self, model, job_id: job})()
+        master = MasterCV(sections_json=json.dumps(self.sections), raw_text="", layout_json="{}")
+        result = TailorCVResult(keywords=[], text="Tailored CV", cacheable=False, used_fallback=True)
 
-            result = await tailor_cv(
-                master_cv,
-                "Cloud Engineer",
-                "Acme",
-                "Need Terraform, Docker, CI/CD, and AWS.",
-            )
+        with patch("app.routers.jobs._get_master_cv_or_400", return_value=master), \
+             patch("app.routers.jobs._run_tailor", new_callable=AsyncMock, return_value=result) as run_tailor:
+            response = await tailor_job(1, db=fake_db)
 
+        self.assertEqual(response.job_id, 1)
+        self.assertEqual(response.tailored_cv, "Tailored CV")
+        self.assertTrue(run_tailor.await_args.kwargs["allow_fallback"])
+
+    async def test_missing_bullet_cannot_be_repaired_from_master(self):
+        weak = self.payload()
+        weak.experience_bullets[0].pop()
+        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request, \
+             patch("app.services.cv_tailor._keywords_from_text", return_value=[]):
+            request.return_value = weak
+            with self.assertRaises(TailoringError):
+                await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations")
         self.assertEqual(request.await_count, 2)
-        self.assertFalse(result.cacheable)
-        self.assertTrue(result.used_fallback)
-        self.assertIn("Original summary.", result.text)
+
+    def test_old_cached_stock_bullets_are_not_reused(self):
+        text = _reconstruct_tailored_text(self.sections, _TailoredPayload())
+        job = type("JobStub", (), {"tailored_cv": text, "tailored_keywords": "AWS"})()
+        self.assertFalse(_has_cached_tailoring(job, self.master))
+        job.tailored_cv = _reconstruct_tailored_text(self.sections, self.payload())
+        self.assertTrue(_has_cached_tailoring(job, self.master))
 
 
 if __name__ == "__main__":

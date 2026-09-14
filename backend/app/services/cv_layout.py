@@ -5,8 +5,8 @@ margins, single vs. two-column structure, and section order.
 `pypdf` does the plain text extraction; `pdfplumber` exposes per-character
 positioning/font data used to derive the layout profile. Both are heuristic
 by nature -- there's no reliable way to recover a PDF's original design
-intent, only to approximate it closely enough for the reportlab generator to
-mirror proportions and ordering.
+intent, only to record metadata for inspection. The fixed HTML template owns
+the rendered design independently of this extracted metadata.
 """
 import io
 from collections import Counter

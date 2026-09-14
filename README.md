@@ -1,7 +1,7 @@
 # SmashApply
 
 Local Cloud/DevOps job-application engine: live-scrapes job boards for a role plus 10 aligned
-titles, tailors your Master CV's wording to each posting with OpenAI GPT-5.6 Terra, and generates
+titles, tailors your Master CV's wording to each posting with OpenAI GPT-4o, and generates
 an ATS-friendly PDF that mirrors your Master CV's original layout — an OpenAI API key is required; no managed
 databases.
 
@@ -10,8 +10,8 @@ databases.
 - **Backend:** Python / FastAPI / SQLAlchemy / SQLite
 - **Layout parsing:** `pypdf` (text) + `pdfplumber` (font/position metadata)
 - **Scraping:** `python-jobspy` against LinkedIn, Indeed, Glassdoor, ZipRecruiter
-- **Tailoring:** OpenAI GPT-5.6 Terra (`gpt-5.6-terra`) with medium reasoning effort
-- **PDF generation:** `reportlab`, driven by the parsed layout profile
+- **Tailoring:** OpenAI GPT-4o (`gpt-4o`) with strict structured JSON output
+- **PDF generation:** Jinja2 HTML/CSS rendered by Playwright Chromium (fixed one-page template)
 - **Frontend:** Next.js (App Router) / Tailwind CSS
 - **Infra:** `docker-compose.yml` for one-command startup
 
@@ -35,7 +35,7 @@ smashapply/
 │   │       ├── text_sections.py   # shared heading/bullet detection heuristics
 │   │       ├── job_scraper.py     # jobspy scraping across 11 role titles
 │   │       ├── cv_tailor.py       # OpenAI-backed keyword extraction + rewrite
-│   │       └── pdf_generator.py   # reportlab ATS PDF mirroring the layout profile
+│   │       └── pdf_generator.py   # Jinja2 + Chromium single-page PDF
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
@@ -66,6 +66,7 @@ cd backend
 python -m venv .venv
 ./.venv/Scripts/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python -m playwright install chromium
 cp .env.example .env
 uvicorn app.main:app --reload
 ```
@@ -73,7 +74,7 @@ uvicorn app.main:app --reload
 API serves on `http://127.0.0.1:8000` (docs at `/docs`). SQLite data lives in
 `backend/data/smashapply.db`, created automatically on first run.
 
-**OpenAI setup:** set `OPENAI_API_KEY` in `backend/.env`. The default model is `gpt-5.6-terra`, configurable through `OPENAI_MODEL`. Restart the backend after changing these settings. API usage is billed separately; your project must have access to the selected model. Existing saved CVs must be tailored again to use the new model.
+**OpenAI setup:** set `OPENAI_API_KEY` in `backend/.env`. The default model is `gpt-4o`, configurable through `OPENAI_MODEL`. Restart the backend after changing these settings. API usage is billed separately; your project must have access to the selected model. Existing saved CVs must be tailored again to use the new model.
 
 ### 2. Frontend
 
@@ -117,16 +118,25 @@ Frontend: `http://localhost:3000`. Backend: `http://localhost:8000`.
 | GET    | `/api/cv`                     | Fetch current master CV + layout profile              |
 | POST   | `/api/jobs/scrape`             | Scrape primary role + 10 aligned titles, dedupe, save  |
 | GET    | `/api/jobs`                    | List scraped jobs                                      |
-| POST   | `/api/jobs/{id}/tailor`        | Ollama: extract keywords, rewrite CV bullets           |
+| POST   | `/api/jobs/{id}/tailor`        | OpenAI: extract keywords, rewrite CV bullets           |
 | GET    | `/api/jobs/{id}/download-cv`   | Generate + download the tailored ATS PDF               |
 
 ## Known limitations
 
-- **Layout parsing is heuristic.** Font/margin/column detection approximates the PDF's design —
-  it can't recover exact original intent, only mirror proportions closely enough for reportlab to
-  reproduce.
-- **Site scraping depends on jobspy and the target sites.** Glassdoor requires a real city/state
-  (not "Remote") to resolve a location, and ZipRecruiter frequently blocks datacenter/non-residential
-  IPs with a 403. LinkedIn and Indeed are generally the most reliable of the four.
-- **PDF fonts are mapped to reportlab's base-14 fonts** (Helvetica/Times/Courier family) by name
-  matching — no custom TTF embedding.
+- **The fixed template targets the saved Master CV.** Its Letter page size, margins,
+  type sizes and blue headings are encoded in `backend/app/templates/cv_template.html`.
+  The original source PDF is needed to verify an exact visual match. Other uploaded
+  designs require a template change; detected layout metadata does not change CSS.
+- **Fonts:** Windows uses installed Calibri; Docker installs the metrically compatible
+  Carlito fallback. Exact glyph appearance requires the same licensed font on each host.
+- **One-page enforcement:** Content is never shrunk or clipped. Overlong CV downloads
+  return HTTP 422; shorten the source wording or tailor again. Existing cached text is
+  adapted to the template without a database migration.
+- **Browser setup:** Local installations require `python -m playwright install chromium`;
+  Linux hosts also need `python -m playwright install --with-deps chromium`. Docker
+  installs Chromium and its dependencies during the build.
+- **Structured output:** The model supplies `summary`, `technical_expertise`, and
+  `experience_bullets`; the application supplies immutable contact details, category
+  labels, employer headings, education, and additional sections. Jinja2 escapes all
+  text and allows only application-generated bold spans.
+- **Scraping:** Availability depends on the source sites and their rate limits.

@@ -1,5 +1,7 @@
 # Python
 backend/.venv/
+backend/.playwright/
+tmp/pdfs/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/*.egg-info/
