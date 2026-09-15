@@ -95,13 +95,13 @@ class PDFGeneratorTests(unittest.TestCase):
             self.assertAlmostEqual(heading['chars'][0]['size'], 9.96, delta=0.03)
             self.assertEqual(tuple(round(v, 3) for v in heading['chars'][0]['non_stroking_color']),
                              (0.184, 0.329, 0.588))
-            rules = [rect for rect in page.rects if rect['width'] > 500]
+            rules = [line for line in page.lines if line['width'] > 500]
             self.assertTrue(rules)
             for rule in rules:
-                self.assertAlmostEqual(rule['height'], 0.24, delta=0.01)
+                self.assertEqual(rule['linewidth'], 0)  # PDF device hairline, not a filled strip
                 self.assertAlmostEqual(rule['x0'], 36, delta=0.1)
                 self.assertAlmostEqual(rule['x1'], 576, delta=0.3)
-                self.assertAlmostEqual(rule['non_stroking_color'][0], 0.627, delta=0.002)
+                self.assertAlmostEqual(rule['stroking_color'][0], 0.627, delta=0.002)
             self.assertTrue(any(0 < heading['top'] - rule['top'] < 13 for rule in rules))
             self.assertIn('1/1', page.extract_text())
 

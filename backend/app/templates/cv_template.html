@@ -19,9 +19,10 @@ header { margin-bottom: 29pt; }
 h2 { color: #2f5496; font-size: 9.96pt; line-height: 12.24pt; font-weight: normal;
  text-transform: uppercase; margin: 0 0 4.92pt; break-after: avoid; }
 section + section { margin-top: 13.2pt; }
-/* Chromium quantizes a subpixel filled rule to 0.75pt in PDF. Scale to a light 0.24pt hairline. */
-hr { border: 0; box-shadow: none; height: 0.48pt; background: #a0a0a0;
- margin: 0 0 9pt; break-after: avoid; transform: scaleY(0.32); transform-origin: top; }
+/* Vector strokes avoid the PDF viewer thickening subpixel filled strips. */
+.divider { display: block; width: 100%; height: 0.48pt; overflow: visible;
+ margin: 0 0 9pt; break-after: avoid; }
+
 p { margin: 0; overflow-wrap: anywhere; }
 ul { list-style: none; margin: 0; padding: 0 0 0 36.02pt; }
 li { position: relative; padding: 0; margin: 0 0 5.4pt; overflow-wrap: anywhere; }
@@ -36,6 +37,9 @@ li:last-child { margin-bottom: 0; }
 li, .entry-heading { break-inside: avoid; }
 </style>
 </head>
+{% macro divider() -%}
+<svg class="divider" role="separator" aria-orientation="horizontal" viewBox="0 0 720 0.64" preserveAspectRatio="none"><path d="M0 0.16H720" fill="none" stroke="#a0a0a0" stroke-width="0.32"/></svg>
+{%- endmacro %}
 <body>
 <header>
 <div class="cv-header"><span class="cv-name">MUHAMMAD YUSUF</span> | {{ role_title | upper }} | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION</div>
@@ -43,14 +47,14 @@ li, .entry-heading { break-inside: avoid; }
 </header>
 {% if summary %}<section><h2>Executive Summary</h2><p>{{ summary | master_emphasis("summary") }}</p></section>{% endif %}
 {% if technical_expertise %}
-<section><hr><h2>Technical Expertise</h2><ul>
+<section>{{ divider() }}<h2>Technical Expertise</h2><ul>
 {% for items in technical_expertise %}<li><strong>{{ expertise_labels[loop.index0] | plain }}:</strong> {{ items | plain }}</li>{% endfor %}
 </ul></section>
 {% endif %}
 {% if experience %}
-<section><hr><h2>Professional Experience</h2>
+<section>{{ divider() }}<h2>Professional Experience</h2>
 {% for entry in experience %}
-<div class="experience-entry">{% if not loop.first %}<hr>{% endif %}
+<div class="experience-entry">{% if not loop.first %}{{ divider() }}{% endif %}
 <p class="entry-heading">{{ entry.header_line | employer_heading(loop.first) }}</p>
 {% if entry.tagline %}<p class="tagline">{{ entry.tagline }}</p>{% endif %}
 <ul>{% for bullet in experience_bullets[loop.index0] %}<li>{{ bullet | master_emphasis }}</li>{% endfor %}</ul></div>
@@ -58,7 +62,7 @@ li, .entry-heading { break-inside: avoid; }
 </section>
 {% endif %}
 {% for section in remaining_sections %}
-<section><hr><h2>{{ section.name }}</h2>
+<section>{{ divider() }}<h2>{{ section.name }}</h2>
 <ul>
 {% for line in section.lines %}<li>{{ line.text | master_label }}</li>{% endfor %}
 </ul></section>
