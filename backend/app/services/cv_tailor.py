@@ -3235,7 +3235,10 @@ async def tailor_cv(
             payload.keywords = _content_keyword_list(target_keywords + payload.keywords)
             _validate_tailored_payload(
                 payload, summary_required, experience_entries, skills_entries,
-                target_keywords=target_keywords,
+                # Keyword density is a writing preference, not a reason to
+                # discard a complete rewrite and return a canned fallback.
+                # An unchanged tools list can be correct for a related role.
+                reject_unchanged_categories=False,
             )
             return _result_from_payload(sections, payload, cacheable=True, target_job_title=job_title)
         except TailoringError as exc:

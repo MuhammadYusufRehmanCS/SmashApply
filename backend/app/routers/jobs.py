@@ -14,6 +14,7 @@ from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
 from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv, has_reframed_experience
 from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
+from app.services.cv_fitting import fit_tailored_cv
 from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -107,15 +108,17 @@ def _has_cached_tailoring(job: Job, cv: MasterCV | None = None) -> bool:
     return present and (cv is None or has_reframed_experience(job.tailored_cv, json.loads(cv.sections_json)))
 
 
-async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bool = False) -> TailorCVResult:
+async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bool = False,
+                      candidate: TailorCVResult | None = None) -> TailorCVResult:
     try:
-        result = await tailor_cv(
+        result = candidate or await tailor_cv(
             cv,
             job.title,
             job.company,
             job.description or job.title,
             allow_fallback=allow_fallback,
         )
+        result, _ = await fit_tailored_cv(result, cv, job.title, job.company, job.description or job.title)
         if result.cacheable:
             job.tailored_cv = result.text
             job.tailored_keywords = ", ".join(result.keywords)
@@ -135,16 +138,25 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bo
             db.commit()
             db.refresh(job)
     except TailoringError as exc:
-        # Non-recoverable local CV issues still surface here. Ollama failures,
-        # malformed JSON, timeouts, and strict validation misses are retried
-        # inside tailor_cv(); callers decide whether retry exhaustion should
-        # fail the tailor action or render a clean Master CV fallback for PDF
-        # download.
+        # Never cache or deliver a CV that failed the wording or page-fit checks.
         logging.exception("Tailoring failed")
         db.rollback()
+        # A failed regeneration must not take away a previously completed CV.
+        # Only reuse this job's own validated, reframed, one-page version.
+        if _has_cached_tailoring(job, cv):
+            try:
+                await run_in_threadpool(build_ats_pdf, job.tailored_cv)
+            except CVOverflowError:
+                pass
+            else:
+                logging.warning("Returning the previously completed CV for job %s after refresh failed", job.id)
+                return TailorCVResult(
+                    keywords=[k.strip() for k in job.tailored_keywords.split(",") if k.strip()],
+                    text=job.tailored_cv, cacheable=False, used_fallback=True,
+                )
         raise HTTPException(
             status_code=502,
-            detail="CV Tailoring failed after retry. No fallback was cached; check backend logs and retry.",
+            detail="Could not finish a fully reframed one-page CV. Your saved CV and design were preserved. Please retry.",
         ) from exc
     except Exception as exc:
         # Anything else (a bug in our own reconstruction code, a bad DB
@@ -198,8 +210,15 @@ async def download_cv(job_id: int, db: Session = Depends(get_db)):
 
     try:
         pdf_bytes = await run_in_threadpool(build_ats_pdf, template_data or cv_text or cv.raw_text)
-    except CVOverflowError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CVOverflowError:
+        # Existing cached CVs may predate the page-fit check. Revise their
+        # wording automatically, and commit only after a successful render.
+        candidate = TailorCVResult(
+            keywords=[k.strip() for k in (job.tailored_keywords or "").split(",") if k.strip()],
+            text=cv_text, cacheable=True, used_fallback=False,
+        )
+        result = await _run_tailor(job, cv, db, candidate=candidate)
+        pdf_bytes = await run_in_threadpool(build_ats_pdf, result.text)
 
     # Dynamically fetch and clean this job's company name so every download is
     # named for its target company (e.g. MYR_Google.pdf, MYR_Amazon.pdf) instead
