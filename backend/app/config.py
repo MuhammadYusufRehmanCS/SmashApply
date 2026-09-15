@@ -23,19 +23,19 @@ class Settings(BaseSettings):
 
     # Job ingestion sources. Direct ATS/job-board providers run alongside JobSpy
     # so Indeed is one input to the pipeline instead of the primary feed.
-    job_sources: str = "greenhouse,lever,builtin,remotive,themuse,jobspy"
+    job_sources: str = "handshake,jobspy,greenhouse,lever,builtin,remotive,themuse"
 
     # JobSpy live scraping
     jobspy_sites: str = "linkedin,indeed,glassdoor,zip_recruiter"
-    jobspy_results_wanted: int = 8
-    jobspy_total_results_wanted: int = 40
+    jobspy_results_wanted: int = 3
+    jobspy_total_results_wanted: int = 15
     jobspy_hours_old: int = 168
     jobspy_country_indeed: str = "USA"
 
     # Direct ATS/job board scraping
     job_http_timeout_seconds: float = 12.0
     job_source_concurrency: int = 4
-    ats_results_wanted: int = 40
+    ats_results_wanted: int = 15
     themuse_pages: int = 3
     themuse_categories: str = "Software Engineering,Computer and IT"
     greenhouse_board_tokens: str = (

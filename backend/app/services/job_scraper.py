@@ -1315,43 +1315,114 @@ async def _scrape_themuse_sources(roles: list[tuple[str, bool]]) -> tuple[list[d
     return jobs[: settings.ats_results_wanted], errors
 
 
-async def scrape_for_roles(primary_role: str, location: str) -> tuple[list[dict], list[str]]:
-    """Return normalized job dictionaries plus per-source error messages."""
-    roles = _roles_for(primary_role)
-    requested_location = _coerce_us_search_location(location)
+def cv_search_roles(master_text: str, primary_role: str = "") -> list[str]:
+    text = master_text.lower()
+    families = [
+        ("Cloud Engineer", ("aws", "azure", "gcp")),
+        ("DevOps Engineer", ("terraform", "ci/cd", "devops")),
+        ("Site Reliability Engineer", ("incident response", "monitoring", "reliability")),
+        ("Platform Engineer", ("kubernetes", "docker", "platform")),
+        ("Systems Administrator", ("linux", "windows server", "administration")),
+    ]
+    roles = [role for role, signals in families if sum(signal in text for signal in signals) >= 2]
+    if primary_role in roles:
+        roles.remove(primary_role)
+        roles.insert(0, primary_role)
+    return roles
+
+
+def cv_alignment_score(job: Mapping[str, Any], master_text: str, roles: list[tuple[str, bool]]) -> int:
+    title = _clean_text(job.get("title"))
+    if not _match_role(title, roles):
+        return 0
+    master = master_text.lower()
+    if re.search(r"\b(staff|principal|director|manager|head|architect)\b", title, re.I):
+        return 0
+    skills = ("aws", "azure", "gcp", "terraform", "kubernetes", "docker", "python", "bash", "ci/cd", "linux", "ansible", "jenkins")
+    job_text = (title + " " + _clean_text(job.get("description"))).lower()
+    return 10 + sum(2 for skill in skills if skill in master and skill in job_text)
+
+
+def _handshake_jobs(html_text: str, roles: list[tuple[str, bool]]) -> list[dict]:
+    match = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', html_text, re.S)
+    if not match:
+        raise ValueError("Public listing data unavailable; Handshake may require sign-in")
+    listings = json.loads(match[1])["props"]["pageProps"]["jobs"]
+    jobs = []
+    for item in listings:
+        title = _clean_text(item.get("jobTitle"))
+        role = _match_role(title, roles)
+        url = item.get("publicUrl", "")
+        if not role or urlparse(url).hostname != "app.joinhandshake.com":
+            continue
+        location = _join_unique(_join_unique([loc.get("city"), loc.get("state")]) for loc in item.get("parsedLocations", []))
+        if not _has_us_signal(location):
+            continue
+        jobs.append(_job_dict(title=title, company=item.get("employerName", ""), location=location,
+            job_url=url, site="handshake", description="", date_posted=_parse_date(item.get("firstActiveAt")),
+            role_category=role[0], is_primary_role=role[1]))
+    return jobs
+
+
+async def _scrape_handshake_sources(roles: list[tuple[str, bool]]) -> tuple[list[dict], list[str]]:
+    if httpx is None:
+        return [], ["handshake: httpx is not installed"]
     settings = get_settings()
+    jobs, errors = [], []
+    async with httpx.AsyncClient(headers=HTTP_HEADERS, timeout=settings.job_http_timeout_seconds, follow_redirects=True) as client:
+        for url in ("https://joinhandshake.com/find-jobs/role/web-it/", "https://joinhandshake.com/find-jobs/remote/"):
+            try:
+                jobs.extend(_handshake_jobs(await _fetch_text(client, url), roles))
+            except Exception as exc:
+                errors.append(f"handshake: {_format_error(exc)}")
+        jobs = _dedupe_jobs(jobs)[:15]
+        for job in jobs:
+            try:
+                detail = await _fetch_text(client, job["job_url"])
+                postings = _json_ld_jobpostings(detail)
+                if postings:
+                    job["description"] = _html_to_text(postings[0].get("description"))
+                if not job["description"]:
+                    errors.append("handshake: some public listings require sign-in for full descriptions")
+            except Exception as exc:
+                errors.append(f"handshake/detail: {_format_error(exc)}")
+    return jobs, list(dict.fromkeys(errors))
 
-    direct_provider_tasks = []
-    jobspy_task = None
-    for source in settings.job_source_list:
-        if source == "greenhouse":
-            direct_provider_tasks.append(_scrape_greenhouse_sources(roles))
-        elif source == "lever":
-            direct_provider_tasks.append(_scrape_lever_sources(roles))
-        elif source == "builtin":
-            direct_provider_tasks.append(_scrape_builtin_sources(roles))
-        elif source == "remotive":
-            direct_provider_tasks.append(_scrape_remotive_sources(roles))
-        elif source == "themuse":
-            direct_provider_tasks.append(_scrape_themuse_sources(roles))
-        elif source == "jobspy":
-            jobspy_task = _scrape_jobspy_sources(roles, requested_location)
-        else:
-            logger.warning("unknown job ingestion source configured: %s", source)
 
-    if not direct_provider_tasks and jobspy_task is None:
-        return [], ["no active job ingestion sources configured"]
-
-    provider_results = []
-    if direct_provider_tasks:
-        provider_results.extend(await asyncio.gather(*direct_provider_tasks))
-    if jobspy_task is not None:
-        provider_results.append(await jobspy_task)
-
-    results: list[dict] = []
-    errors: list[str] = []
-    for provider_jobs, provider_errors in provider_results:
-        results.extend(provider_jobs)
-        errors.extend(provider_errors)
-
-    return _order_for_persistence(_dedupe_jobs(results)), errors
+async def scrape_for_roles(primary_role: str, location: str, *, master_text: str = "",
+                           existing_keys: set | None = None) -> tuple[list[dict], list[str]]:
+    """Collect at most 15 new CV-aligned jobs; stop querying once the batch is full."""
+    names = cv_search_roles(master_text, primary_role)
+    if not names:
+        return [], ["No supported search roles matched the master CV."]
+    roles = [(name, i == 0) for i, name in enumerate(names)]
+    settings = get_settings()
+    providers = {
+        "handshake": _scrape_handshake_sources, "greenhouse": _scrape_greenhouse_sources,
+        "lever": _scrape_lever_sources, "builtin": _scrape_builtin_sources,
+        "remotive": _scrape_remotive_sources, "themuse": _scrape_themuse_sources,
+    }
+    results, errors = [], []
+    seen = set(existing_keys or ())
+    sources = list(dict.fromkeys(["handshake"] + settings.job_source_list))
+    for source in sources:
+        try:
+            if source == "jobspy":
+                jobs, failures = await _scrape_jobspy_sources(roles, _coerce_us_search_location(location))
+            elif source in providers:
+                jobs, failures = await providers[source](roles)
+            else:
+                continue
+        except Exception as exc:
+            errors.append(f"{source}: {_format_error(exc)}")
+            continue
+        errors.extend(failures)
+        for job in sorted(jobs, key=lambda j: cv_alignment_score(j, master_text, roles), reverse=True):
+            keys = job_dedupe_keys(job)
+            if not cv_alignment_score(job, master_text, roles) or seen.intersection(keys):
+                continue
+            seen.update(keys)
+            results.append(job)
+            if len(results) == 15:
+                return sorted(results, key=lambda j: cv_alignment_score(j, master_text, roles), reverse=True), errors
+    return sorted(results, key=lambda j: cv_alignment_score(j, master_text, roles), reverse=True), errors

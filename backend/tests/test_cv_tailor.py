@@ -18,6 +18,7 @@ from app.services.cv_tailor import (
     _prepare_summary_text,
     _reconstruct_tailored_text,
     _render_technical_expertise,
+    _render_experience_entries,
     _rewrite_experience_bullet,
     _split_experience_entries,
     _split_technical_expertise,
@@ -97,7 +98,7 @@ class CvTailorTests(unittest.TestCase):
         self.assertIn("Docker/Kubernetes", plain)
         self.assertIn("across AWS and Azure infrastructure", plain)
 
-    def test_devops_platforms_filters_cloud_service_duplicates(self):
+    def test_skills_rendering_preserves_model_tools(self):
         rendered = _render_technical_expertise(
             [
                 {
@@ -109,12 +110,12 @@ class CvTailorTests(unittest.TestCase):
             ["AWS (Lambda, IAM, VPC), Terraform, Docker, GitHub Actions, CloudWatch"],
         )
 
-        self.assertNotIn("AWS (Lambda", rendered)
-        self.assertNotIn("CloudWatch", rendered)
+        self.assertIn("AWS (Lambda", rendered)
+        self.assertIn("CloudWatch", rendered)
         self.assertIn("Terraform", rendered)
         self.assertIn("GitHub Actions", rendered)
 
-    def test_payload_validation_rejects_unchanged_bullet(self):
+    def test_payload_validation_accepts_unchanged_bullet(self):
         payload = _TailoredPayload(
             keywords=["Terraform"],
             summary="Cloud automation engineer focused on Terraform delivery.",
@@ -122,17 +123,16 @@ class CvTailorTests(unittest.TestCase):
             experience_bullets=[["Built CI/CD pipelines."]],
         )
 
-        with self.assertRaises(TailoringError):
-            _validate_tailored_payload(
-                payload,
-                summary_required=True,
-                experience_entries=[{"bullets": ["Built CI/CD pipelines."]}],
-                skills_entries=[
-                    {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker"}
-                ],
-            )
+        _validate_tailored_payload(
+            payload,
+            summary_required=True,
+            experience_entries=[{"bullets": ["Built CI/CD pipelines."]}],
+            skills_entries=[
+                {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker"}
+            ],
+        )
 
-    def test_payload_validation_rejects_unchanged_technical_expertise(self):
+    def test_payload_validation_accepts_unchanged_technical_expertise(self):
         payload = _TailoredPayload(
             keywords=["Terraform"],
             summary="Cloud automation engineer focused on Terraform delivery.",
@@ -140,17 +140,16 @@ class CvTailorTests(unittest.TestCase):
             experience_bullets=[["Built **Terraform** CI/CD automation."]],
         )
 
-        with self.assertRaises(TailoringError):
-            _validate_tailored_payload(
-                payload,
-                summary_required=True,
-                experience_entries=[{"bullets": ["Built CI/CD pipelines."]}],
-                skills_entries=[
-                    {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker"}
-                ],
-            )
+        _validate_tailored_payload(
+            payload,
+            summary_required=True,
+            experience_entries=[{"bullets": ["Built CI/CD pipelines."]}],
+            skills_entries=[
+                {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker"}
+            ],
+        )
 
-    def test_payload_validation_rejects_bullets_without_target_keywords(self):
+    def test_payload_validation_accepts_bullets_without_target_keywords(self):
         payload = _TailoredPayload(
             keywords=["Terraform", "Docker", "CI/CD"],
             summary="Cloud automation engineer focused on Terraform-backed CI/CD delivery.",
@@ -164,24 +163,23 @@ class CvTailorTests(unittest.TestCase):
             ],
         )
 
-        with self.assertRaises(TailoringError):
-            _validate_tailored_payload(
-                payload,
-                summary_required=True,
-                experience_entries=[
-                    {
-                        "bullets": [
-                            "Built release pipelines.",
-                            "Managed infrastructure.",
-                            "Improved releases.",
-                        ]
-                    }
-                ],
-                skills_entries=[
-                    {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker, CI/CD"}
-                ],
-                target_keywords=["Terraform", "Docker", "CI/CD"],
-            )
+        _validate_tailored_payload(
+            payload,
+            summary_required=True,
+            experience_entries=[
+                {
+                    "bullets": [
+                        "Built release pipelines.",
+                        "Managed infrastructure.",
+                        "Improved releases.",
+                    ]
+                }
+            ],
+            skills_entries=[
+                {"prefix": "-", "label": "DevOps & Platforms", "items": "Terraform, Docker, CI/CD"}
+            ],
+            target_keywords=["Terraform", "Docker", "CI/CD"],
+        )
 
     def test_reconstruction_preserves_immutable_lines(self):
         sections = [
@@ -223,6 +221,29 @@ class CvTailorTests(unittest.TestCase):
         )
         self.assertIn("A.S. Computer Science, Los Angeles Harbor College", tailored)
         self.assertIn("Accelerated **CI/CD** delivery", tailored)
+
+    def test_nonempty_reworded_bullets_survive_count_mismatch(self):
+        entries = [{"header_line": "Engineer | Company | 2025", "tagline": None,
+                    "bullets": ["Original first.", "Original second."]}]
+        rendered = _render_experience_entries(entries, [["Model-written replacement."]])
+        self.assertIn("Model-written replacement.", rendered)
+        self.assertNotIn("Original", rendered)
+        self.assertIn("Original first.", _render_experience_entries(entries, [[]]))
+
+    def test_reconstruction_preserves_summary_and_short_skills_verbatim(self):
+        sections = [
+            {"name": "Executive Summary", "content": "Original summary."},
+            {"name": "Technical Expertise", "content": "- Cloud: AWS, Azure, GCP, networking, monitoring, architecture"},
+        ]
+        payload = _TailoredPayload(summary="Results-driven engineer with specific model wording.",
+                                  technical_expertise=["**GCP**"])
+        before = payload.model_dump()
+        _validate_tailored_payload(payload, True, None, _split_technical_expertise(sections[1]['content']))
+        self.assertEqual(payload.model_dump(), before)
+        rendered = _reconstruct_tailored_text(sections, payload)
+        self.assertIn(payload.summary, rendered)
+        self.assertIn("Cloud: **GCP**", rendered)
+        self.assertNotIn("AWS", rendered)
 
     def test_blank_keywords_cache_is_not_considered_tailored(self):
         job = type("JobStub", (), {"tailored_cv": "Original CV text", "tailored_keywords": ""})()
@@ -268,28 +289,24 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present", result.text)
         self.assertIn("A.S. Computer Science, Los Angeles Harbor College", result.text)
 
-    async def test_superficial_verb_swap_retries_with_feedback(self):
+    async def test_model_wording_is_not_rejected_for_similarity(self):
         weak = self.payload()
         weak.experience_bullets[0][0] = "Architected and governed high-availability AWS/Azure architectures, ensuring 99.9% uptime for production workloads."
         with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request, \
              patch("app.services.cv_tailor._keywords_from_text", return_value=[]):
             request.side_effect = [weak, self.payload()]
             result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Reliable service operations")
-        self.assertEqual(request.await_count, 2)
-        self.assertIn("previous response failed validation", request.await_args_list[1].args[1])
-        self.assertIn(self.bullets[0], result.text)
+        self.assertEqual(request.await_count, 1)
+        self.assertIn(weak.experience_bullets[0][0], result.text)
 
-    async def test_failed_retries_return_tailored_fallback_when_enabled(self):
+    async def test_failed_retries_do_not_fabricate_python_rewrites(self):
         for failure in [TailoringError("invalid JSON"), LLMExecutionError("API unavailable")]:
             with self.subTest(failure=type(failure).__name__), \
                  patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
                 request.side_effect = failure
-                result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
+                with self.assertRaises(TailoringError):
+                    await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
                 self.assertEqual(request.await_count, 2)
-                self.assertTrue(result.used_fallback)
-                self.assertFalse(result.cacheable)
-                self.assertNotIn("Original summary.", result.text)
-                self.assertIn("Cloud Engineer | Arqon Consulting | Bay Area, CA | Jan 2025 - Present", result.text)
 
     async def test_tailor_route_requests_fallback_on_retry_failure(self):
         job = type("Job", (), {"id": 1, "title": "Systems Engineer", "company": "Acme", "description": "Service operations"})()
@@ -315,10 +332,10 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
                 await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations")
         self.assertEqual(request.await_count, 2)
 
-    def test_old_cached_stock_bullets_are_not_reused(self):
+    def test_cache_validation_checks_structure_not_wording(self):
         text = _reconstruct_tailored_text(self.sections, _TailoredPayload())
         job = type("JobStub", (), {"tailored_cv": text, "tailored_keywords": "AWS"})()
-        self.assertFalse(_has_cached_tailoring(job, self.master))
+        self.assertTrue(_has_cached_tailoring(job, self.master))
         job.tailored_cv = _reconstruct_tailored_text(self.sections, self.payload())
         self.assertTrue(_has_cached_tailoring(job, self.master))
 

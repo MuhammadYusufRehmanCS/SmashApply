@@ -1,44 +1,10 @@
-"""Rewrites a Master CV's Executive Summary, Technical Expertise, and
-Professional Experience bullets to mirror a target job description, via
-OpenAI Chat Completions. Every other section of the CV -- the Header/contact
-line apart from the top resume headline title, Education, Certifications,
-Additional, and anything else -- is reproduced byte-for-byte from the master
-CV and is never sent to, or returned by, the model.
+"""Tailor editable CV fields using the model's SYSTEM_PROMPT.
 
-Anti-hallucination design: rather than relying on prompt instructions alone
-to stop the model from inventing/altering employers, dates, titles, degrees,
-or the surrounding document structure, those facts are structurally kept out
-of the model's hands entirely --
-
-  - The Professional Experience section is split (in Python, before any
-    LLM call) into per-employer entries. Only each entry's BULLET TEXT is
-    sent to the model; the entry's title/company/location/dates line is
-    never sent and never comes back from the model -- it's spliced back in
-    verbatim when reconstructing the tailored CV.
-  - Technical Expertise is split the same way, into per-category entries.
-    Only each category's tool-list TEXT is sent; the category LABEL (e.g.
-    "Cloud & Infrastructure:") is immutable and spliced back in verbatim --
-    the model sees it for context (so it tailors the right kind of tools
-    into the right category) but never has to echo, and can never alter, it.
-  - Any section that couldn't be confidently split this way (an atypically
-    formatted resume), or that isn't Summary/Skills/Experience at all
-    (Education, Certifications, Additional, ...), is passthrough, always,
-    unconditionally -- reproduced byte-for-byte from the master CV. The only
-    header exception is the top resume headline title, which may be replaced
-    with the target job title while the name/contact line stays locked.
-  - OpenAI is called with a strict JSON schema, and the response is parsed and
-    shape-validated (Pydantic) before it's allowed anywhere near the PDF
-    renderer. Missing category rewrites, mismatched employer/bullet counts,
-    unchanged bullets, leaked schema keys, and cliche summary starters are
-    rejected or cleaned before reconstruction. A failed attempt gets one
-    retry; if the model still cannot produce strict output,
-    the service either salvages usable tailored JSON as a non-cacheable
-    response or returns clean Master CV fallback text for PDF rendering.
-
-Works for ANY scraped role -- DevOps, Platform Engineering, Cloud Engineering,
-SRE, Data Engineering, etc. -- by having the model dynamically infer the role
-category and required tools from that specific job's title/company/description
-rather than assuming a fixed role type.
+Python validates required fields and section/bullet counts, preserves immutable
+identity and employer details, and renders the model's wording without similarity,
+keyword-density, category-content, or original-length overrides. Empty-field
+fallbacks remain available to legacy reconstruction callers; successful model
+responses must be complete. API failures never produce Python-written rewrites.
 """
 import json
 from difflib import SequenceMatcher
@@ -564,20 +530,10 @@ def _render_experience_entries(entries: list[dict], tailored_bullets: list[list[
 
         original_bullets = entry["bullets"]
         reworded_raw = tailored_bullets[i] if i < len(tailored_bullets) else []
-        # Drop anything that's unambiguously not a real bullet (a leaked
-        # schema key like "experience_bullets") before even comparing
-        # counts -- a dropped item naturally causes a count mismatch below,
-        # which is exactly what should trigger falling back to the originals.
-        reworded = [b for b in reworded_raw if not _looks_like_leaked_key(b)]
-        # Only trust the model's reworded bullets for this employer if the
-        # count matches exactly -- otherwise fall back to the untouched
-        # originals rather than risk a merged/dropped/fabricated bullet.
-        bullets = reworded if len(reworded) == len(original_bullets) else original_bullets
-
+        reworded = [b.strip() for b in reworded_raw if b.strip()]
+        bullets = reworded if reworded else original_bullets
         for bullet in bullets:
-            cleaned = _clean_field_text(bullet).strip()
-            if cleaned:
-                lines.append(f"- {cleaned}")
+            lines.append(f"- {bullet}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
@@ -921,16 +877,8 @@ def _is_valid_category_rewording(candidate: str, entry: dict) -> bool:
 def _render_technical_expertise(entries: list[dict], tailored_items: list[str]) -> str:
     lines = []
     for i, entry in enumerate(entries):
-        items = entry["items"]
-        # Per-category fallback: only trust the model's rewording for THIS
-        # category if it was actually returned and passes validation --
-        # otherwise keep that one category's original items rather than
-        # discarding the whole section over one bad entry.
-        if i < len(tailored_items):
-            candidate = _strip_stray_category_prefix(_clean_field_text(tailored_items[i]).strip())
-            candidate = _enforce_category_contract(entry["label"], candidate, entry["items"])
-            if candidate and _is_valid_category_rewording(candidate, entry):
-                items = candidate
+        candidate = tailored_items[i].strip() if i < len(tailored_items) else ""
+        items = candidate if candidate else entry["items"]
         lines.append(f"{entry['prefix']} {entry['label']}: {items}")
     return "\n".join(lines)
 
@@ -978,8 +926,8 @@ def _reconstruct_tailored_text(
             content = _render_experience_entries(experience_entries, payload.experience_bullets)
         elif i == skills_idx and skills_entries is not None:
             content = _render_technical_expertise(skills_entries, payload.technical_expertise)
-        elif i == summary_idx and payload.summary.strip() and not _looks_like_leaked_key(payload.summary):
-            content = _prepare_summary_text(payload.summary)
+        elif i == summary_idx and payload.summary.strip():
+            content = payload.summary.strip()
         else:
             # Passthrough for literally everything else -- Header, Education,
             # Certifications, Additional, and a Summary/Skills/Experience
@@ -1070,6 +1018,7 @@ def _is_superficial_rewrite(original: str, candidate: str) -> bool:
 
 
 def has_reframed_experience(text: str, sections: list[dict]) -> bool:
+    """Legacy name: check employer structure and nonempty bullets, not prose similarity."""
     expected = [entry for section in sections if _is_experience_section(section["name"])
                 for entry in (_split_experience_entries(section["content"]) or [])]
     actual = template_context_from_text(text)["experience"]
@@ -1078,7 +1027,7 @@ def has_reframed_experience(text: str, sections: list[dict]) -> bool:
     return all(
         before["header_line"] == after["header_line"]
         and len(before["bullets"]) == len(after["bullets"])
-        and all(not _is_superficial_rewrite(a, b) for a, b in zip(before["bullets"], after["bullets"]))
+        and all(bullet.strip() for bullet in after["bullets"])
         for before, after in zip(expected, actual)
     )
 
@@ -2889,154 +2838,26 @@ def _validate_tailored_payload(
     reject_unchanged_bullets: bool = True,
     target_keywords: list[str] | None = None,
 ) -> None:
-    """Rejects responses that would undermine forced tailoring. Older behavior
-    silently fell back to untouched bullets/categories on count mismatch; this
-    service now refuses structurally incomplete model output so users do not
-    receive a half-tailored resume. After the retry path, callers can disable
-    complete-output requirements to salvage valid tailored sections from a
-    locally brittle model response instead of falling all the way back to the
-    master CV."""
-    target_keywords = _content_keyword_list(target_keywords or [])
+    """Validate required fields and structure only; never judge or rewrite prose.
 
-    if summary_required:
-        summary = _prepare_summary_text(payload.summary)
-        if not summary or _looks_like_leaked_key(summary):
-            if require_complete:
-                raise TailoringError("Model did not return a usable tailored Executive Summary.")
-            summary = ""
-        payload.summary = summary
-
+    Legacy comparison/keyword arguments remain accepted for call compatibility.
+    SYSTEM_PROMPT controls wording, keyword selection, and how much to reframe.
+    """
+    if summary_required and require_complete and not payload.summary.strip():
+        raise TailoringError("Model did not return an Executive Summary.")
     if skills_entries is not None:
         if require_complete and len(payload.technical_expertise) != len(skills_entries):
-            raise TailoringError(
-                f"Model returned {len(payload.technical_expertise)} Technical Expertise categories "
-                f"but {len(skills_entries)} categories were sent."
-            )
-        cleaned_items: list[str] = []
-        for i, entry in enumerate(skills_entries, start=1):
-            if i > len(payload.technical_expertise):
-                cleaned_items.append("")
-                continue
-            raw_item = payload.technical_expertise[i - 1]
-            candidate = _strip_stray_category_prefix(_clean_field_text(raw_item).strip())
-            candidate = _enforce_category_contract(entry["label"], candidate, entry["items"])
-            if not candidate or not _is_valid_category_rewording(candidate, entry):
-                if require_complete:
-                    raise TailoringError(f"Model returned an invalid Technical Expertise category at index {i}.")
-                candidate = ""
-            elif reject_unchanged_categories and _comparison_key(candidate) == _comparison_key(entry["items"]):
-                raise TailoringError(f"Model returned an unchanged Technical Expertise category at index {i}.")
-            cleaned_items.append(candidate)
-
-        if require_complete and target_keywords:
-                    for i, (entry, cleaned_item) in enumerate(zip(skills_entries, cleaned_items), start=1):
-                        category_keywords = [
-                            keyword for keyword in target_keywords if _keyword_fits_category(entry["label"], keyword)
-                        ]
-                        required_skill_matches = min(4, len(category_keywords))
-                        if not required_skill_matches:
-                            continue
-                        matched_skill_keywords = _keyword_match_count(cleaned_item, category_keywords)
-                        if matched_skill_keywords < required_skill_matches:
-                            logger.warning(
-                                "Technical expertise category '%s' matched %d target JD keywords out of %d required.",
-                                entry["label"],
-                                matched_skill_keywords,
-                                required_skill_matches,
-                            )
-        payload.technical_expertise = cleaned_items
-
+            raise TailoringError("Model returned the wrong number of Technical Expertise categories.")
+        if require_complete and any(not item.strip() for item in payload.technical_expertise):
+            raise TailoringError("Model returned an empty Technical Expertise category.")
     if experience_entries is not None:
         if require_complete and len(payload.experience_bullets) != len(experience_entries):
-            raise TailoringError(
-                f"Model returned {len(payload.experience_bullets)} employer bullet lists "
-                f"but {len(experience_entries)} employers were sent."
-            )
-
-        cleaned_groups: list[list[str]] = []
-        for employer_idx, entry in enumerate(experience_entries, start=1):
-            raw_bullets = (
-                payload.experience_bullets[employer_idx - 1]
-                if employer_idx <= len(payload.experience_bullets)
-                else []
-            )
-            original_bullets = entry["bullets"]
-            cleaned = [
-                _clean_field_text(bullet).strip()
-                for bullet in raw_bullets
-                if bullet and not _looks_like_leaked_key(bullet)
-            ]
-            if len(cleaned) != len(original_bullets):
-                if require_complete:
-                    raise TailoringError(
-                        f"Model returned {len(cleaned)} usable bullets for employer {employer_idx} "
-                        f"but {len(original_bullets)} were sent."
-                    )
-                cleaned_groups.append(cleaned)
-                continue
-            for bullet_idx, (original, tailored) in enumerate(zip(original_bullets, cleaned), start=1):
-                if not tailored or _looks_like_leaked_key(tailored):
-                    if require_complete:
-                        raise TailoringError(
-                            f"Model returned an invalid bullet for employer {employer_idx}, bullet {bullet_idx}."
-                        )
-                    cleaned[bullet_idx - 1] = original
-                    continue
-                if reject_unchanged_bullets and _is_superficial_rewrite(original, tailored):
-                    raise TailoringError(
-                        f"Model returned an unchanged or superficially rewritten bullet for employer {employer_idx}, bullet {bullet_idx}."
-                    )
-                bullet_keywords = _bullet_keyword_candidates(original, target_keywords)
-                required_bullet_matches = min(3, len(bullet_keywords))
-                if require_complete and required_bullet_matches:
-                    matched_bullet_keywords = _keyword_match_count(tailored, bullet_keywords)
-                    if matched_bullet_keywords < required_bullet_matches:
-                        raise TailoringError(
-                            f"Model tailored employer {employer_idx}, bullet {bullet_idx} with only "
-                            f"{matched_bullet_keywords} JD keyword matches; required {required_bullet_matches}."
-                        )
-                    repeated_keywords = _repeated_long_keywords(tailored, bullet_keywords)
-                    if repeated_keywords:
-                        raise TailoringError(
-                            f"Model repeated JD keyword(s) in employer {employer_idx}, bullet {bullet_idx}: "
-                            f"{', '.join(repeated_keywords)}."
-                        )
-            required_keyword_bullets = _required_keyword_bullet_count(original_bullets, target_keywords)
-            if require_complete and required_keyword_bullets:
-                keyword_bullets = sum(1 for bullet in cleaned if _keyword_match_count(bullet, target_keywords))
-                if keyword_bullets < required_keyword_bullets:
-                    raise TailoringError(
-                        f"Model tailored only {keyword_bullets} JD-keyword-bearing bullets for employer "
-                        f"{employer_idx}; required {required_keyword_bullets}."
-                    )
-            required_role_keywords = _required_role_keyword_count(original_bullets, target_keywords)
-            if require_complete and required_role_keywords:
-                role_keywords = _keyword_list([
-                    keyword
-                    for original in original_bullets
-                    for keyword in _bullet_keyword_candidates(original, target_keywords)
-                ])
-                matched_role_keywords = _keyword_match_count(" ".join(cleaned), role_keywords)
-                if matched_role_keywords < required_role_keywords:
-                    raise TailoringError(
-                        f"Model tailored employer {employer_idx} with only {matched_role_keywords} "
-                        f"distinct JD keyword matches; required {required_role_keywords}."
-                    )
-            cleaned_groups.append(cleaned)
-
-        required_experience_keywords = _required_experience_keyword_count(experience_entries, target_keywords)
-        if require_complete and required_experience_keywords:
-            experience_keywords = _experience_keyword_candidates(experience_entries, target_keywords)
-            matched_experience_keywords = _keyword_match_count(
-                " ".join(" ".join(group) for group in cleaned_groups),
-                experience_keywords,
-            )
-            if matched_experience_keywords < required_experience_keywords:
-                raise TailoringError(
-                    f"Model tailored Professional Experience with only {matched_experience_keywords} "
-                    f"distinct JD keyword matches; required {required_experience_keywords}."
-                )
-        payload.experience_bullets = cleaned_groups
+            raise TailoringError("Model returned the wrong number of employer bullet lists.")
+        for index, (entry, bullets) in enumerate(zip(experience_entries, payload.experience_bullets), 1):
+            if require_complete and len(bullets) != len(entry["bullets"]):
+                raise TailoringError(f"Model returned the wrong bullet count for employer {index}.")
+            if require_complete and any(not bullet.strip() for bullet in bullets):
+                raise TailoringError(f"Model returned an empty bullet for employer {index}.")
 
 
 def _chat_messages(prompt: str) -> list[dict[str, str]]:
@@ -3252,25 +3073,8 @@ async def tailor_cv(
                     "(normally 15-25 words) and the summary 45-60 words for the one-page design."
                 )
                 continue
-            if allow_fallback:
-                logging.warning("CV tailoring failed after retry; returning deterministic tailored fallback: %s", exc)
-                return _deterministic_fallback_result(
-                    sections,
-                    job_title,
-                    experience_entries,
-                    skills_entries,
-                    target_keywords,
-                )
+            # Never substitute deterministic/master wording for a model response.
             raise TailoringError(f"CV tailoring failed after retry: {exc}") from exc
-    if allow_fallback:
-        logging.warning("CV tailoring failed after retry; returning deterministic tailored fallback.")
-        return _deterministic_fallback_result(
-            sections,
-            job_title,
-            experience_entries,
-            skills_entries,
-            target_keywords,
-        )
     raise TailoringError("CV tailoring failed after retry.")
 
 

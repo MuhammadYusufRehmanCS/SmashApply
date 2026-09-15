@@ -12,7 +12,7 @@ from app.models import Job, MasterCV
 from app.roles import PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
 from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv, has_reframed_experience
-from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names
+from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names, cv_search_roles
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
 from app.services.cv_fitting import fit_tailored_cv
 from starlette.concurrency import run_in_threadpool
@@ -34,7 +34,7 @@ async def scrape_jobs_endpoint(payload: ScrapeRequest, db: Session = Depends(get
     primary_role = (payload.primary_role or PRIMARY_ROLE_DEFAULT).strip() or PRIMARY_ROLE_DEFAULT
     location = (payload.location or "Remote").strip() or "Remote"
 
-    found, site_errors = await scrape_for_roles(primary_role, location)
+    master = _get_master_cv_or_400(db)
 
     # Dedupe against existing DB rows and same-batch duplicates. Provider URLs
     # can differ for the same posting, so treat a normalized URL OR normalized
@@ -42,6 +42,10 @@ async def scrape_jobs_endpoint(payload: ScrapeRequest, db: Session = Depends(get
     existing_keys = set()
     for title, company, job_url in db.execute(select(Job.title, Job.company, Job.job_url)).all():
         existing_keys.update(job_dedupe_keys({"title": title, "company": company, "job_url": job_url}))
+
+    found, site_errors = await scrape_for_roles(
+        primary_role, location, master_text=master.raw_text, existing_keys=existing_keys,
+    )
 
     created = 0
     skipped = 0
@@ -72,7 +76,7 @@ async def scrape_jobs_endpoint(payload: ScrapeRequest, db: Session = Depends(get
     return ScrapeResult(
         primary_role=primary_role,
         location=location,
-        roles_queried=scrape_role_names(primary_role),
+        roles_queried=cv_search_roles(master.raw_text, primary_role),
         total_found=len(found),
         created=created,
         skipped=skipped,

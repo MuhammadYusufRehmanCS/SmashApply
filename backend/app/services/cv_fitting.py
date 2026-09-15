@@ -20,7 +20,7 @@ async def fit_tailored_cv(result, master, title, company, description):
     for attempt in range(4):
         try:
             if result.used_fallback or not has_reframed_experience(result.text, sections):
-                raise TailoringError("Every experience bullet must be materially reframed.")
+                raise TailoringError("CV must contain complete model-generated experience sections.")
             pdf = await asyncio.to_thread(build_ats_pdf, result.text)
             return result, pdf
         except (CVOverflowError, TailoringError) as exc:

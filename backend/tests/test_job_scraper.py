@@ -52,5 +52,53 @@ class JobScraperTests(unittest.TestCase):
         self.assertEqual([job["site"] for job in ordered], ["linkedin", "indeed", "greenhouse", "builtin"])
 
 
+class FocusedScrapeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stops_at_15_and_does_not_query_more_sources(self):
+        from unittest.mock import AsyncMock, patch
+        from types import SimpleNamespace
+        from app.services.job_scraper import scrape_for_roles
+        jobs = [dict(title='Cloud Engineer', company=f'Company {i}', job_url=f'https://example.com/{i}',
+                     description='AWS Terraform', site='handshake') for i in range(30)]
+        with patch('app.services.job_scraper.get_settings', return_value=SimpleNamespace(job_source_list=['handshake','lever'])), \
+             patch('app.services.job_scraper._scrape_handshake_sources', new_callable=AsyncMock, return_value=(jobs, [])), \
+             patch('app.services.job_scraper._scrape_lever_sources', new_callable=AsyncMock) as later:
+            results, errors = await scrape_for_roles('Cloud Engineer', 'Remote', master_text='AWS Azure Terraform CI/CD')
+        self.assertEqual(len(results), 15)
+        later.assert_not_called()
+
+    async def test_skips_existing_and_unrelated_jobs_before_limit(self):
+        from unittest.mock import AsyncMock, patch
+        from types import SimpleNamespace
+        from app.services.job_scraper import scrape_for_roles
+        jobs = [dict(title='Cloud Engineer', company=f'Company {i}', job_url=f'https://example.com/{i}',
+                     description='AWS Terraform', site='handshake') for i in range(20)]
+        jobs.insert(0, dict(title='Receptionist', company='Other', job_url='https://example.com/no', description='', site='handshake'))
+        seen = job_dedupe_keys(jobs[1])
+        with patch('app.services.job_scraper.get_settings', return_value=SimpleNamespace(job_source_list=['handshake'])), \
+             patch('app.services.job_scraper._scrape_handshake_sources', new_callable=AsyncMock, return_value=(jobs, [])):
+            results, errors = await scrape_for_roles('Receptionist', 'Remote', master_text='AWS Azure Terraform CI/CD', existing_keys=seen)
+        self.assertEqual(len(results), 15)
+        self.assertTrue(all(j['title']=='Cloud Engineer' and j['company']!='Company 0' for j in results))
+
+    def test_handshake_public_data_parser(self):
+        import json
+        from app.services.job_scraper import _handshake_jobs
+        listing = dict(jobTitle='Junior Systems Administrator', employerName='Example',
+                       publicUrl='https://app.joinhandshake.com/public/jobs/123',
+                       parsedLocations=[dict(city='Boston', state='Massachusetts')], firstActiveAt='2026-09-10T00:00:00Z')
+        html = '<script id="__NEXT_DATA__" type="application/json">'+json.dumps({'props':{'pageProps':{'jobs':[listing]}}})+'</script>'
+        jobs = _handshake_jobs(html, [('Systems Administrator', True)])
+        self.assertEqual(len(jobs),1)
+        self.assertEqual(jobs[0]['company'],'Example')
+        self.assertEqual(jobs[0]['site'],'handshake')
+
+    def test_cv_roles_do_not_include_unrelated_primary(self):
+        from app.services.job_scraper import cv_search_roles, cv_alignment_score
+        roles = cv_search_roles('AWS Azure Terraform Docker Kubernetes CI/CD Linux Windows Server', 'Receptionist')
+        self.assertIn('Cloud Engineer',roles)
+        self.assertNotIn('Receptionist',roles)
+        self.assertEqual(cv_alignment_score({'title':'Staff Cloud Engineer'},'AWS Azure', [('Cloud Engineer',True)]),0)
+
+
 if __name__ == "__main__":
     unittest.main()
