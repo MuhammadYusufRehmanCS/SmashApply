@@ -805,13 +805,21 @@ def _build_prompt(
     for entry in experience_entries or []:
         # The model gets grouping/count metadata, never base achievements or taglines.
         heading = entry['header_line'].replace('**', '')
-        parts = [part.strip() for part in re.split(r"\s*\|\s*|\s+at\s+|\s+[-??]\s+", heading)]
+        parts = [part.strip() for part in re.split(r"\s*\|\s*|\s+at\s+|\s+[-\u2013\u2014]\s+", heading)]
         employer_requirements.append({
             'employer': parts[1] if len(parts) > 1 else '',
             'title': parts[0],
             'bullet_count_required': len(entry['bullets']),
         })
-    requirements_json = json.dumps(employer_requirements, ensure_ascii=False)
+    requirements_text = '\n\n'.join(
+        f"Employer: {entry['employer']}\n"
+        f"Role Title: {entry['title']}\n"
+        f"Bullet Count Required: {entry['bullet_count_required']}\n\n"
+        f"Generate {entry['bullet_count_required']} brand-new, high-impact engineering workstream "
+        "bullet points tailored 100% to the Target JD. Do not echo standard DevOps boilerplate. "
+        "Return these generated strings directly in this employer's experience_bullets array."
+        for entry in employer_requirements
+    ) or 'No employer entries; return an empty experience_bullets array.'
     # Filter every experience section, not just the first parsed section, so raw
     # bullet text cannot leak back through the full-master context.
     master_json = json.dumps({'master_cv': {
@@ -846,7 +854,7 @@ any technical_expertise entries)"
         f"Job Title: {job_title}\n"
         f"Company: {company_name}\n"
         f"Target Job Description:\n{job_description_text}\n\n"
-        f"Experience Requirements (employer order):\n{requirements_json}\n\n"
+        f"Experience Requirements (employer order):\n{requirements_text}\n\n"
         f"Master CV JSON:\n{master_json}\n\n"
         "Use the full Target Job Description above to generate brand-new, high-impact engineering "
         "workstream bullets according to SYSTEM_PROMPT. For each employer, generate exactly "

@@ -360,8 +360,10 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         request = client.chat.completions.create.await_args.kwargs
         user = next(message['content'] for message in request['messages'] if message['role'] == 'user')
         self.assertIn('Target Job Description:\n' + jd + '\n\nExperience Requirements (employer order):\n', user)
-        requirements = json.loads(user.split('Experience Requirements (employer order):\n', 1)[1].split('\n\nMaster CV JSON:', 1)[0])
-        self.assertEqual(requirements, [{'employer': 'Arqon Consulting', 'title': 'Cloud Engineer', 'bullet_count_required': 2}])
+        requirements = user.split('Experience Requirements (employer order):\n', 1)[1].split('\n\nMaster CV JSON:', 1)[0]
+        self.assertIn('Employer: Arqon Consulting\nRole Title: Cloud Engineer\nBullet Count Required: 2', requirements)
+        self.assertIn('Generate 2 brand-new, high-impact engineering workstream bullet points tailored 100% to the Target JD.', requirements)
+        self.assertIn('Do not echo standard DevOps boilerplate.', requirements)
         for entry in _split_experience_entries(self.sections[2]['content']):
             for bullet in entry['bullets']:
                 self.assertNotIn(bullet, user)
