@@ -19,7 +19,7 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
                     factory.return_value.__aexit__ = AsyncMock(return_value=False)
                     result = await _request_tailored_payload(
                         Settings(_env_file=None, openai_api_key="test-key", openai_model=model),
-                        "Return tailored JSON", 0.3,
+                        "Return tailored JSON",
                     )
                 self.assertEqual(result.summary, "Tailored summary")
                 request = client.chat.completions.create.call_args.kwargs
@@ -34,5 +34,5 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(request["reasoning_effort"], "medium")
                     self.assertNotIn("temperature", request)
                 else:
-                    self.assertEqual(request["temperature"], 0.3)
+                    self.assertEqual(request["temperature"], 0.7)
                     self.assertNotIn("reasoning_effort", request)

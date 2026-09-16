@@ -795,23 +795,29 @@ def _build_prompt(
 ) -> tuple[str, list[dict] | None, list[dict] | None]:
     experience_idx = next((i for i, s in enumerate(sections) if _is_experience_section(s["name"])), None)
     experience_entries: list[dict] | None = None
-    employers_block = "(no Professional Experience section could be confidently parsed -- do not \
-return any experience_bullets entries)"
     if experience_idx is not None:
         experience_entries = _split_experience_entries(sections[experience_idx]["content"])
         if experience_entries is None:
             message = "Could not parse Professional Experience headers/bullets; original text will not be substituted."
             logger.error(message)
             raise TailoringError(message)
-        if experience_entries:
-            parts = []
-            for i, entry in enumerate(experience_entries):
-                bullet_lines = "\n".join(f"  - {b}" for b in entry["bullets"])
-                parts.append(
-                    f"Employer {i + 1} ({len(entry['bullets'])} original bullets; "
-                    f"return exactly {len(entry['bullets'])} rewritten bullets):\n{bullet_lines}"
-                )
-            employers_block = "\n\n".join(parts)
+    employer_requirements = []
+    for entry in experience_entries or []:
+        # The model gets grouping/count metadata, never base achievements or taglines.
+        heading = entry['header_line'].replace('**', '')
+        parts = [part.strip() for part in re.split(r"\s*\|\s*|\s+at\s+|\s+[-??]\s+", heading)]
+        employer_requirements.append({
+            'employer': parts[1] if len(parts) > 1 else '',
+            'title': parts[0],
+            'bullet_count_required': len(entry['bullets']),
+        })
+    requirements_json = json.dumps(employer_requirements, ensure_ascii=False)
+    # Filter every experience section, not just the first parsed section, so raw
+    # bullet text cannot leak back through the full-master context.
+    master_json = json.dumps({'master_cv': {
+        'sections': [section for section in sections if not _is_experience_section(section['name'])],
+        'experience': employer_requirements,
+    }}, ensure_ascii=False)
 
     summary_idx = next((i for i, s in enumerate(sections) if _is_summary_section(s["name"])), None)
     summary_block = sections[summary_idx]["content"] if summary_idx is not None else "(none)"
@@ -839,14 +845,18 @@ any technical_expertise entries)"
         f"--- TARGET JOB ---\n"
         f"Job Title: {job_title}\n"
         f"Company: {company_name}\n"
-        f"Job Description:\n{job_description_text}\n\n"
+        f"Target Job Description:\n{job_description_text}\n\n"
+        f"Experience Requirements (employer order):\n{requirements_json}\n\n"
+        f"Master CV JSON:\n{master_json}\n\n"
+        "Use the full Target Job Description above to generate brand-new, high-impact engineering "
+        "workstream bullets according to SYSTEM_PROMPT. For each employer, generate exactly "
+        "bullet_count_required bullets matching the target JD. Original experience text is intentionally omitted. "
+        "Keep master_cv historical metadata immutable. Return rewritten experience_bullets in the same order.\n\n"
         f"--- EXISTING SUMMARY (reframe this) ---\n{summary_block}\n\n"
         f"--- EXISTING TECHNICAL EXPERTISE CATEGORIES (reorder/rephrase each category's tool list \
 only -- the category name itself, shown here only for context, is fixed and you do not return it) \
 ---\n{skills_block}\n\n"
-        f"--- EXISTING BULLETS PER EMPLOYER (reword each employer's bullets; you are NOT told \
-which company/title/dates these belong to, and must not guess or reference one) ---\n"
-        f"{employers_block}\n"
+
     )
     return prompt, experience_entries, skills_entries
 
@@ -2736,7 +2746,7 @@ def _deterministic_tailored_payload(
     return payload
 
 
-async def _request_tailored_payload(settings, prompt: str, temperature: float = TAILORING_TEMPERATURE) -> _TailoredPayload:
+async def _request_tailored_payload(settings, prompt: str) -> _TailoredPayload:
     api_key = (settings.openai_api_key or "").strip()
     if not api_key:
         raise LLMExecutionError("OPENAI_API_KEY is missing; set it in backend/.env.")
@@ -2745,7 +2755,7 @@ async def _request_tailored_payload(settings, prompt: str, temperature: float = 
     generation_options = (
         {"reasoning_effort": "medium"}
         if settings.openai_model.startswith(("gpt-5.6-terra", "gpt-6-astra"))
-        else {"temperature": temperature}
+        else {"temperature": 0.7}
     )
     request_context = f"model='{settings.openai_model}', options={generation_options}"
     try:
@@ -2887,7 +2897,7 @@ async def tailor_cv(
     # every model-written experience bullet and substituted master-based sentences.
     for attempt in range(2):
         try:
-            payload = await _request_tailored_payload(settings, prompt, TAILORING_TEMPERATURE)
+            payload = await _request_tailored_payload(settings, prompt)
             payload.keywords = _content_keyword_list(target_keywords + payload.keywords)
             _validate_tailored_payload(
                 payload, summary_required, experience_entries, skills_entries,

@@ -5,7 +5,7 @@ import logging
 import math
 
 from app.services.cv_tailor import (
-    TAILORING_TEMPERATURE, TailorCVResult, TailoringError, LLMExecutionError, _TailoredPayload, _build_prompt, _request_tailored_payload,
+    TailorCVResult, TailoringError, LLMExecutionError, _TailoredPayload, _build_prompt, _request_tailored_payload,
     _result_from_payload, _validate_tailored_payload, has_reframed_experience,
 )
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
@@ -146,7 +146,7 @@ async def fit_tailored_cv(result, master, title, company, description):
                     _set_field(current, path, replacements[path])
                 payload = _TailoredPayload.model_validate(current)
             else:
-                payload = await _request_tailored_payload(settings, request, TAILORING_TEMPERATURE)
+                payload = await _request_tailored_payload(settings, request)
             _validate_tailored_payload(payload, summary_required, experience, skills,
                                        reject_unchanged_categories=False)
             result = _result_from_payload(sections, payload, cacheable=True, target_job_title=title)
