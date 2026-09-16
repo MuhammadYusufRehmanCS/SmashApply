@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 import sys
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -28,6 +29,7 @@ from app.services.cv_tailor import (
     _split_experience_entries,
     _split_technical_expertise,
     _validate_tailored_payload,
+    _request_tailored_payload,
     tailor_cv,
 )
 from app.services.text_sections import is_bullet_line
@@ -65,13 +67,13 @@ class CvTailorTests(unittest.TestCase):
         self.assertEqual(summary, "Cloud Engineer aligning AWS, Terraform, and CI/CD delivery.")
 
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
-        self.assertIn("ALL Experience Bullets", SYSTEM_PROMPT)
-        self.assertIn("Do not just swap 1-2 words", SYSTEM_PROMPT)
-        self.assertIn("Return the exact same number of bullet points", SYSTEM_PROMPT)
+        self.assertIn("Every bullet MUST", SYSTEM_PROMPT)
+        self.assertIn("Simply swapping verbs or inserting isolated keywords is an INVALID generation", SYSTEM_PROMPT)
+        self.assertIn("Return EXACTLY the same number of bullets per employer", SYSTEM_PROMPT)
 
     def test_system_prompt_requires_readable_keyword_use(self):
-        self.assertIn("Readability takes priority over keyword density", SYSTEM_PROMPT)
-        self.assertIn("DO NOT keyword-stuff", SYSTEM_PROMPT)
+        self.assertIn("RECRUITER-READABLE NARRATIVE STRUCTURE", SYSTEM_PROMPT)
+        self.assertIn("single flowing accomplishment", SYSTEM_PROMPT)
 
     def test_rewrite_does_not_stack_aligned_language_keywords(self):
         rewritten = _rewrite_experience_bullet(
@@ -337,6 +339,33 @@ class CvTailorTests(unittest.TestCase):
 
 
 class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_api_receives_category_context_and_requested_temperature(self):
+        sections = [{'name': 'Technical Expertise', 'content':
+                     '- Cloud & Infrastructure: AWS, Azure\nGCP, VPC\n- DevOps & Platforms: Terraform, Kubernetes'}]
+        prompt, _, entries = _build_prompt(sections, 'Data Engineer', 'Example', 'Data platforms')
+        self.assertEqual(entries[0]['items'], 'AWS, Azure GCP, VPC')
+        client = AsyncMock()
+        client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                'technical_expertise': ['AWS, BigQuery', 'Airflow, Terraform']})))])
+        with patch('app.services.cv_tailor.AsyncOpenAI') as factory:
+            factory.return_value.__aenter__.return_value = client
+            await _request_tailored_payload(SimpleNamespace(openai_api_key='test', openai_model='gpt-4o'), prompt)
+        args = client.chat.completions.create.await_args.kwargs
+        self.assertEqual(args['temperature'], 0.65)
+        self.assertIn('"label": "Cloud & Infrastructure", "items": "AWS, Azure GCP, VPC"', args['messages'][1]['content'])
+
+    def test_long_new_workstreams_survive_rendering_without_content_checks(self):
+        entries = [{'header_line': 'Engineer | Example | 2023 - Present', 'tagline': None,
+                    'bullets': ['Original bullet.']}]
+        rewritten = ('Architected **Data Platform** orchestration with Airflow, lineage tracking, '
+                     'schema contracts, and policy-as-code checks to ensure auditability. ' * 4).strip()
+        with patch('app.services.cv_tailor._is_superficial_rewrite', side_effect=AssertionError('No similarity checks')), \
+             patch('app.services.cv_tailor._clean_field_text', side_effect=AssertionError('No regex content cleaning')):
+            rendered = _render_experience_entries(entries, [[rewritten]])
+        self.assertIn(rewritten, rendered)
+        self.assertNotIn('Original bullet.', rendered)
+
     def setUp(self):
         self.sections = [
             {"name": "Header", "content": "MUHAMMAD YUSUF | CLOUD ENGINEER\nBay Area, CA"},

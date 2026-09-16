@@ -127,6 +127,23 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
         limits = _wording_limits(dict(available_height=600, fixed_height=400, fields=fields))
         self.assertEqual(limits['summary']['lines'], 2)
 
+    async def test_shortening_request_includes_category_label_with_tools(self):
+        self.sections.insert(2, {'name': 'Technical Expertise', 'content': '- Cloud & Infrastructure: AWS, Azure'})
+        self.master.sections_json = json.dumps(self.sections)
+        self.payload.technical_expertise = ['AWS, Azure, GCP, VPC, Data Platform']
+        candidate = _result_from_payload(self.sections, self.payload, cacheable=True)
+        field = dict(path='technical_expertise.0', lines=3, characters=200, width=670,
+                     prefix_width=120, average_char_width=5.5, line_height=16.32)
+        measurement = dict(available_height=600, content_height=614, fixed_height=565, fields=[field])
+        with patch('app.services.cv_fitting.build_ats_pdf', side_effect=[
+                CVOverflowError('too long', measurements=measurement), b'%PDF-test']), \
+             patch('app.services.cv_fitting.request_wording_replacements', new_callable=AsyncMock,
+                   return_value={'technical_expertise.0': 'AWS, Azure, Data Platform'}) as request:
+            await fit_tailored_cv(candidate, self.master, 'Engineer', 'Example', 'Services')
+        spec = request.await_args.args[1]['technical_expertise.0']
+        self.assertEqual(spec['category_label'], 'Cloud & Infrastructure')
+        self.assertEqual(spec['text'], self.payload.technical_expertise[0])
+
     def test_stalled_overflow_strictly_reduces_the_previous_character_budget(self):
         field = dict(path='summary', lines=3, characters=250, width=670,
                      prefix_width=0, average_char_width=5.5, line_height=16.32)

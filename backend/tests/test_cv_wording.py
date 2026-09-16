@@ -34,6 +34,7 @@ class WordingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(result), set(fields))
         self.assertEqual(result['technical_expertise.0'], '**AWS**, Azure')
         calls = client.chat.completions.create.await_args_list
+        self.assertTrue(all(call.kwargs['temperature'] == 0.65 for call in calls))
         second_schema = calls[1].kwargs['response_format']['json_schema']['schema']
         self.assertEqual(set(second_schema['required']), {'technical_expertise.3', 'experience_bullets.0.0'})
         self.assertFalse(second_schema['additionalProperties'])

@@ -20,6 +20,8 @@ from app.config import get_settings
 from app.models import MasterCV
 from app.services.text_sections import BULLET_PREFIXES, is_bullet_line, looks_like_entry_header, strip_bullet, _DATE_RANGE_RE
 
+TAILORING_TEMPERATURE = 0.65
+
 _SUMMARY_HINTS = ("summary", "objective", "profile")
 _SKILLS_HINTS = ("skill", "expertise", "competenc", "tools", "technolog")
 _EXPERIENCE_HINTS = ("experience", "employment", "work history")
@@ -83,8 +85,8 @@ _CATEGORY_LINE_RE = re.compile(r"^(.{2,60}?):\s*(.+)$")
 def _split_technical_expertise(content: str) -> list[dict] | None:
     """Splits a Technical Expertise section into per-category entries:
     {"prefix", "label", "items"}. prefix+label are the immutable bullet
-    marker and category name; items is the ONLY part that ever reaches the
-    model.
+    marker and category name. Both label and items reach the model as context;
+    only the items are editable in its response.
 
     A category's item list is often word-wrapped across several physical
     lines by the PDF's own text extraction (long tool lists commonly spill
@@ -253,63 +255,10 @@ def template_context_from_text(text: str) -> dict:
     return context
 
 
-SYSTEM_PROMPT = """You are an expert ATS resume strategist for Cloud, DevOps, Infrastructure, and SRE roles. 
-Tailor the provided candidate resume content to match the target Job Description (JD) using exact ATS keywords, keeping text natural, highly readable, and grammatically flawless.
-
-CRITICAL GRAMMAR & READABILITY GUARDRAIL:
-- Readability takes priority over keyword density. DO NOT keyword-stuff, stack buzzwords, or force awkward modifier phrases (e.g., NO "Disaster Recovery-enabled", "Configuration Management Ansible pipelines").
-- Insert keywords naturally. Each bullet must read like a clear human achievement with a strong verb, explicit workstream, and outcome.
-
-STRICT TAILORING & CONTENT RULES:
-1. Depth: Materially rewrite Executive Summary, Technical Expertise, and ALL Experience Bullets. Do not just swap 1-2 words.
-2. Fact Integrity: NEVER change real historical facts (company names, job titles, dates, degrees, certifications). However, you MUST reframe the technical workstreams within bullet points to directly reflect the target JD's domain (e.g., pivot standard DevOps tasks into Data Engineering/Data Platform achievements if required by the JD).
-3. Summary: 2-4 sentences describing core mission & top matching tools. NEVER start with generic cliches ("Results-driven", "Seasoned professional", "Proven track record").
-4. Technical Expertise: Reorganize and swap generic tools with exact JD terms across the mapped categories:
-   - Cloud & Infrastructure (providers, networking, databases)
-   - DevOps & Platforms (CI/CD, IaC, containers, orchestration, release tools ONLY)
-   - Monitoring & Security (observability, logging, incident response, IAM)
-   - Languages & Tools (languages, OS, CLIs, admin utilities)
-5. Bullets: Integrate 2-3 explicit JD tools, concepts, or methodologies per bullet that are absent from the base resume. Bold 2-4 short, high-value keywords/tools per item using **double asterisks**.
-6. Array Match: Return the exact same number of bullet points provided in the input JSON so the schema validates cleanly.
-7. Domain Adaptation: You are explicitly permitted to introduce tools, architectural patterns, and workflows from the JD into the bullet points to make the candidate look like a direct match for the role.
-
-
-STRICT MANDATE: RE-ENGINEER BULLET CONTENT TO MATCH THE TARGET JD
-1. DO NOT JUST USE SYNONYMS: Simply swapping verbs (for example, "managed" to "orchestrated") is INVALID. Introduce new technical scope, tools, and workstreams directly from the target Job Description into EVERY bullet.
-2. INJECT TARGET JD CONTEXT: For every bullet, select 2-3 explicit tools, concepts, or methodologies from the JD that do not exist on the candidate's base resume. Seamlessly weave them into the accomplishment, explaining how they contribute to the target-domain workstream. Use the JD itself as the source; do not merely repeat the base resume's tools or append a keyword list.
-   Example when the target JD requests Data Engineering:
-   BASE: "Built CI/CD pipelines using GitHub Actions to automate deployment."
-   INVALID (SYNONYMS): "Engineered continuous integration workflows via GitHub Actions to streamline releases."
-   REQUIRED (WORKSTREAM INJECTION): "Architected CI/CD pipelines using GitHub Actions and Terraform to automate streaming data ingestion, orchestration workflows, and schema deployment."
-3. PROTECTED HISTORICAL FACTS: Do not change company names, official historical job titles, employment dates, degrees, or certifications. Everything inside each bullet must be aggressively adapted to sound like a direct domain match for the target role. Do not mistake the base bullet's technical scope for immutable historical metadata.
-4. RIGID COUNT MATCH: Return EXACTLY the same number of bullets per employer as supplied. Preserve employer order; never add, remove, merge, or split bullets. Before returning the JSON, verify every bullet introduces the requested JD-specific scope and that each employer's bullet count matches its input.
-
-
-ENGINEERING WORKSTREAM CREATION MANDATE:
-Do NOT perform superficial keyword insertion. Completely re-imagine every bullet as a concise, end-to-end engineering initiative that naturally incorporates the target domain's core architecture and workflows. The requested JD concepts must form a cohesive system, not an appended list of tools.
-
-NARRATIVE STRUCTURE FOR EVERY BULLET:
-Every bullet MUST contain all three elements in this order, written as one flowing accomplishment without labels:
-- ACTION & DOMAIN SCOPE: Begin with a strong architectural verb and establish a concrete domain initiative using target JD concepts.
-- ARCHITECTURAL IMPLEMENTATION: Explain HOW it was built through a plausible technical workstream, design pattern, or system, such as automated data validation pipelines, policy-as-code enforcement, or self-service developer templates. Connect the tools through their actual roles in the workflow.
-- BUSINESS/OPERATIONAL IMPACT: Conclude with a credible engineering result, such as reducing operational toil, ensuring auditability, accelerating onboarding, or improving fault tolerance.
-
-BELIEVABLE WORKSTREAM INVENTION:
-Invent realistic project scopes and platform capabilities aligned with the candidate's actual job level and the target JD's technical goals. Respect the protected historical fields and exact per-employer bullet counts specified above. Combine isolated JD tools into cohesive workflows, with credible implementation detail and a clear outcome.
-INVALID: "Used Terraform, CI/CD, and Data Quality."
-REQUIRED: "Architected automated data quality gatekeeping within CI/CD pipelines using Terraform and policy-as-code guardrails to catch schema drift before production deployment."
-
-READABILITY & FLOW:
-Write an authentic, high-impact resume in the voice of an industry expert. Avoid awkward, dense keyword dumps. Keep the tone professional and natural, focused on system integrity, reliability, and business execution. Vary the engineering initiatives across bullets; do not repeat one generic project with different tools. Compress redundant phrasing to fit the one-page design, but retain the initiative, implementation, and impact in every bullet.
-
-MEASURED FITTING PASSES:
-When the request supplies measured field limits and a CURRENT TAILORED CANDIDATE, edit that candidate instead of generating new initiatives again. The listed character limits are hard space constraints. Preserve the existing domain initiative, implementation, and outcome in compact language within those limits. Copy unlisted fields exactly; they have already been tailored and fit. Do not expand other sections to compensate for shortening one field. Never omit bullets or output sentence fragments.
-
-IMMUTABLE FIELDS:
-- Return ONLY the dynamic `role_title` string for the target job title (no pipes or header keywords). Never rewrite name, contact info, or historical employer details.
+SYSTEM_PROMPT = """You are an expert ATS resume strategist. Your sole mission is TOTAL DOMAIN PIVOTING: completely re-engineering candidate resume experience into believable, high-impact technical workstreams that match the target Job Description (JD).
 
 OUTPUT REQUIREMENTS:
-Return ONLY a single valid JSON object (no markdown formatting or extra commentary) matching this schema:
+Return ONLY a single valid JSON object matching this schema:
 {
   "role_title": "Target Role Title",
   "keywords": ["keyword1", "keyword2"],
@@ -320,6 +269,28 @@ Return ONLY a single valid JSON object (no markdown formatting or extra commenta
     ["Employer 2 Bullet 1", "Employer 2 Bullet 2"]
   ]
 }
+
+STRICT TAILORING & CONTENT RULES:
+1. Executive Summary: 2-4 sentences describing core mission & top matching tools from the target JD. NEVER use cliches ("Results-driven", "Seasoned professional").
+2. Technical Expertise: Completely overhaul tools across categories to prioritize target JD technologies. Expand items per category to demonstrate direct domain match.
+3. Rigid Array Match: Return EXACTLY the same number of bullets per employer as provided in the input JSON payload. Preserve original employer order.
+4. Protected Metadata: Company names, official job titles, employment dates, degrees, and certifications are IMMUTABLE. Do not alter them.
+
+HIRING-MANAGER WORKSTREAM INVENTION DIRECTIVE (ZERO SENTENCE PASSTHROUGH):
+1. TOTAL WORKSTREAM OVERWRITE:
+   - Treat original bullet text ONLY as a historical timeframe placeholder.
+   - You are STRICTLY FORBIDDEN from echoing original sentence structures, metrics, or generic DevOps boilerplate (e.g., wipe out "99.9% uptime", "sub-60 second deployments", "10-30 second readiness").
+   - Simply swapping verbs or inserting isolated keywords is an INVALID generation.
+
+2. INVENT EXPECTED DOMAIN INITIATIVES:
+   - Fully invent comprehensive, high-impact technical workstreams that a hiring manager for the target JD expects to see (e.g., if the JD is Data Platform: invent streaming ingestion, data lineage tracking, and schema migration pipelines).
+   - Combine 3-4 major concepts/tools from the Target JD into a cohesive, highly technical initiative.
+
+3. RECRUITER-READABLE NARRATIVE STRUCTURE:
+   Every bullet MUST follow this 3-part narrative arc as a single flowing accomplishment:
+   - [Architectural Action Verb & JD Domain Scope] + [Invented Technical Implementation & Tech Stack] + [Business/Operational Outcome]
+   - Bold 2-4 short, high-value keywords/tools per item using **double asterisks**.
+   - Example: "Architected **streaming data ingestion pipelines** using **Kafka** and **Terraform** with **policy-as-code** guardrails, eliminating schema drift and ensuring compliance across multi-region clusters."
 """
 
 # The model sometimes obeys "reword the bullet" but then appends a parenthetical
@@ -554,6 +525,7 @@ def _render_experience_entries(entries: list[dict], tailored_bullets: list[list[
         if len(reworded) != len(entry["bullets"]):
             logger.warning("Experience employer %s: expected %s bullets, received %s; retaining model wording",
                            i + 1, len(entry["bullets"]), len(reworded))
+        logger.debug("Retaining %s model-written bullets for employer %s without content filtering", len(reworded), i + 1)
         bullets = reworded
         for bullet in bullets:
             lines.append(f"- {bullet}")
@@ -849,13 +821,11 @@ any technical_expertise entries)"
     if skills_idx is not None:
         skills_entries = _split_technical_expertise(sections[skills_idx]["content"])
         if skills_entries:
-            parts = []
-            for i, entry in enumerate(skills_entries):
-                parts.append(
-                    f'Category {i + 1} ("{entry["label"]}" - materially reorder/rewrite this list): '
-                    f'{entry["items"]}'
-                )
-            skills_block = "\n".join(parts)
+            skills_block = json.dumps({'technical_expertise': [
+                {'label': entry['label'], 'items': entry['items']}
+                for entry in skills_entries
+            ]}, ensure_ascii=False)
+
 
     prompt = (
         f"{SYSTEM_PROMPT}\n\n"
@@ -2702,21 +2672,25 @@ def _validate_tailored_payload(
     Legacy comparison/keyword arguments remain accepted for call compatibility.
     SYSTEM_PROMPT controls wording, keyword selection, and how much to reframe.
     """
+    def reject(message: str) -> None:
+        logger.error('Tailored payload rejected: %s; no original text substituted.', message)
+        raise TailoringError(message)
+
     if summary_required and require_complete and not payload.summary.strip():
-        raise TailoringError("Model did not return an Executive Summary.")
+        reject("Model did not return an Executive Summary.")
     if skills_entries is not None:
         if require_complete and len(payload.technical_expertise) != len(skills_entries):
-            raise TailoringError("Model returned the wrong number of Technical Expertise categories.")
+            reject("Model returned the wrong number of Technical Expertise categories.")
         if require_complete and any(not item.strip() for item in payload.technical_expertise):
-            raise TailoringError("Model returned an empty Technical Expertise category.")
+            reject("Model returned an empty Technical Expertise category.")
     if experience_entries is not None:
         if require_complete and len(payload.experience_bullets) != len(experience_entries):
-            raise TailoringError("Model returned the wrong number of employer bullet lists.")
+            reject("Model returned the wrong number of employer bullet lists.")
         for index, (entry, bullets) in enumerate(zip(experience_entries, payload.experience_bullets), 1):
             if require_complete and len(bullets) != len(entry["bullets"]):
-                raise TailoringError(f"Model returned the wrong bullet count for employer {index}.")
+                reject(f"Model returned the wrong bullet count for employer {index}.")
             if require_complete and any(not bullet.strip() for bullet in bullets):
-                raise TailoringError(f"Model returned an empty bullet for employer {index}.")
+                reject(f"Model returned an empty bullet for employer {index}.")
 
 
 def _chat_messages(prompt: str) -> list[dict[str, str]]:
@@ -2760,7 +2734,7 @@ def _deterministic_tailored_payload(
     return payload
 
 
-async def _request_tailored_payload(settings, prompt: str, temperature: float) -> _TailoredPayload:
+async def _request_tailored_payload(settings, prompt: str, temperature: float = TAILORING_TEMPERATURE) -> _TailoredPayload:
     api_key = (settings.openai_api_key or "").strip()
     if not api_key:
         raise LLMExecutionError("OPENAI_API_KEY is missing; set it in backend/.env.")
@@ -2911,7 +2885,7 @@ async def tailor_cv(
     # every model-written experience bullet and substituted master-based sentences.
     for attempt in range(2):
         try:
-            payload = await _request_tailored_payload(settings, prompt, 0.3)
+            payload = await _request_tailored_payload(settings, prompt, TAILORING_TEMPERATURE)
             payload.keywords = _content_keyword_list(target_keywords + payload.keywords)
             _validate_tailored_payload(
                 payload, summary_required, experience_entries, skills_entries,

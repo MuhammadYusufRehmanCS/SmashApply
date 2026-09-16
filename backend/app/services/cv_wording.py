@@ -4,7 +4,7 @@ import logging
 
 from openai import APIError, AsyncOpenAI
 
-from app.services.cv_tailor import LLMExecutionError, TailoringError
+from app.services.cv_tailor import LLMExecutionError, TailoringError, TAILORING_TEMPERATURE
 
 
 async def request_wording_replacements(settings, fields: dict, title: str) -> dict[str, str]:
@@ -16,7 +16,7 @@ async def request_wording_replacements(settings, fields: dict, title: str) -> di
     feedback = {}
     options = ({'reasoning_effort': 'medium'}
                if settings.openai_model.startswith(('gpt-5.6-terra', 'gpt-6-astra'))
-               else {'temperature': 0.2})
+               else {'temperature': TAILORING_TEMPERATURE})
     for attempt in range(3):
         # No arrays: the model cannot add, remove, reorder, or relabel categories
         # or employer bullets. It can only replace the explicitly requested text.
