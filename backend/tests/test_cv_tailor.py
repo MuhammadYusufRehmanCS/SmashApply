@@ -16,6 +16,11 @@ from app.services.cv_tailor import (
     TailorCVResult,
     _TailoredPayload,
     _prepare_summary_text,
+    _clean_field_text,
+    _enforce_category_contract,
+    _keyword_fits_category,
+    _is_valid_category_rewording,
+    _build_prompt,
     _reconstruct_tailored_text,
     _render_technical_expertise,
     _render_experience_entries,
@@ -62,7 +67,7 @@ class CvTailorTests(unittest.TestCase):
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
         self.assertIn("ALL Experience Bullets", SYSTEM_PROMPT)
         self.assertIn("Do not just swap 1-2 words", SYSTEM_PROMPT)
-        self.assertIn("Never add, delete, merge, or split bullets/categories", SYSTEM_PROMPT)
+        self.assertIn("Return the exact same number of bullet points", SYSTEM_PROMPT)
 
     def test_system_prompt_requires_readable_keyword_use(self):
         self.assertIn("Readability takes priority over keyword density", SYSTEM_PROMPT)
@@ -228,7 +233,10 @@ class CvTailorTests(unittest.TestCase):
         rendered = _render_experience_entries(entries, [["Model-written replacement."]])
         self.assertIn("Model-written replacement.", rendered)
         self.assertNotIn("Original", rendered)
-        self.assertIn("Original first.", _render_experience_entries(entries, [[]]))
+        with self.assertLogs("app.services.cv_tailor", level="ERROR") as logs:
+            with self.assertRaisesRegex(TailoringError, "employer 1"):
+                _render_experience_entries(entries, [[]])
+        self.assertIn("missing or empty model bullets", logs.output[0])
 
     def test_reconstruction_preserves_summary_and_short_skills_verbatim(self):
         sections = [
@@ -244,6 +252,81 @@ class CvTailorTests(unittest.TestCase):
         self.assertIn(payload.summary, rendered)
         self.assertIn("Cloud: **GCP**", rendered)
         self.assertNotIn("AWS", rendered)
+
+    def test_long_and_alternate_headers_send_all_bullets_to_prompt(self):
+        headers = [
+            "Senior Cloud Infrastructure Engineer | Very Long Employer Name Consulting and Technology Services | San Francisco Bay Area, California | January 2023 - September 2025",
+            "Cloud Engineer at Example Consulting",
+            "Cloud Engineer - Example Consulting - Jan 2023 to Sep 2025",
+            "Cloud Engineer|Example Consulting",
+            "Cloud Engineer\nExample Consulting\nJan 2023 \u2013 Sep 2025",
+        ]
+        for header in headers:
+            with self.subTest(header=header):
+                content = header + "\n- Delivered reliable services.\n- Automated deployments."
+                entries = _split_experience_entries(content)
+                self.assertEqual(len(entries), 1)
+                self.assertEqual(entries[0]['bullets'], ['Delivered reliable services.', 'Automated deployments.'])
+                prompt, parsed, _ = _build_prompt([{'name':'Professional Experience','content':content}],
+                                                  'Cloud Engineer', 'Target', 'Cloud infrastructure')
+                self.assertIn('Delivered reliable services.', prompt)
+                self.assertEqual(len(parsed[0]['bullets']), 2)
+
+    def test_multiline_employer_boundaries_do_not_swallow_bullets(self):
+        text = ("Cloud Engineer\nExample A\nJan 2023 - Feb 2024\n- Delivered services\nwith automated recovery.\n"
+                "Platform Engineer\nExample B\nMar 2024 - Present\n- Built release tools.")
+        entries = _split_experience_entries(text)
+        self.assertEqual(len(entries), 2)
+        self.assertIn('Example B', entries[1]['header_line'])
+        self.assertEqual(entries[0]['bullets'], ['Delivered services with automated recovery.'])
+
+    def test_unparseable_experience_fails_visibly_before_model_request(self):
+        with self.assertLogs('app.services.cv_tailor', level='ERROR'):
+            with self.assertRaisesRegex(TailoringError, 'Could not parse'):
+                _build_prompt([{'name':'Professional Experience','content':'Unstructured text without headers or bullets'}],
+                              'Engineer', 'Target', 'Job description')
+
+    def test_uppercase_wrapped_headers_stay_inside_experience_section(self):
+        from app.services.text_sections import segment_sections
+        sections = segment_sections('PROFESSIONAL EXPERIENCE\nCLOUD ENGINEER\nEXAMPLE CONSULTING\nJan 2023 - Present\n- Built systems.\nADDITIONAL\nEnglish')
+        self.assertEqual([section['name'] for section in sections], ['Professional Experience', 'Additional'])
+        entries = _split_experience_entries(sections[0]['content'])
+        self.assertIn('EXAMPLE CONSULTING', entries[0]['header_line'])
+        self.assertEqual(entries[0]['bullets'], ['Built systems.'])
+
+    def test_content_cleaning_preserves_reframed_phrasing(self):
+        text = 'Reframed infrastructure operations (rewords existing bullet) with 8 years of experience in new technologies.'
+        self.assertEqual(_clean_field_text(text), text)
+        self.assertEqual(_clean_field_text('```text\n' + text + '\n```'), text)
+        self.assertTrue(_is_valid_category_rewording('Rust', {'label':'Languages', 'items':'A very long original technology list'}))
+
+    def test_category_contract_preserves_domain_terms_without_blacklists(self):
+        candidates = [
+            'Data Platform, Orchestration, Lineage, AWS (Glue, Athena), Terraform',
+            '**Kafka**, Kubernetes, Data Pipeline, Governance, AWS, Lineage',
+            '  Lineage, Lineage, New Domain Tool (alpha, beta)  ',
+            '',
+        ]
+        for label in ['Cloud & Infrastructure', 'DevOps & Platforms', 'Monitoring & Security', 'Languages & Tools']:
+            for candidate in candidates:
+                with self.subTest(label=label, candidate=candidate):
+                    self.assertEqual(_enforce_category_contract(label, candidate, 'ORIGINAL TOOLS'), candidate)
+
+    def test_domain_terms_are_not_blocked_by_category_membership(self):
+        for label in ['Cloud & Infrastructure', 'DevOps & Platforms', 'Monitoring & Security', 'Languages & Tools']:
+            for term in ['Data Platform', 'Orchestration', 'Lineage', 'Terraform', 'AWS', 'Novel Domain Term']:
+                with self.subTest(label=label, term=term):
+                    self.assertTrue(_keyword_fits_category(label, term))
+        self.assertFalse(_keyword_fits_category('Cloud', '   '))
+
+    def test_invalid_experience_output_logs_error_without_original_substitution(self):
+        entries = [{'header_line':'Engineer | Company | 2025', 'tagline':None,
+                    'bullets':['ORIGINAL BULLET']}]
+        for payload in [None, [], [[]], [['']], [['New wording', ' ']], [[None]], ['not a bullet list'], [['One'], ['Extra employer']]]:
+            with self.subTest(payload=payload), self.assertLogs('app.services.cv_tailor', level='ERROR') as logs:
+                with self.assertRaises(TailoringError):
+                    _render_experience_entries(entries, payload)
+            self.assertIn('no original bullets substituted', logs.output[0])
 
     def test_blank_keywords_cache_is_not_considered_tailored(self):
         job = type("JobStub", (), {"tailored_cv": "Original CV text", "tailored_keywords": ""})()
@@ -333,7 +416,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.await_count, 2)
 
     def test_cache_validation_checks_structure_not_wording(self):
-        text = _reconstruct_tailored_text(self.sections, _TailoredPayload())
+        text = _reconstruct_tailored_text(self.sections, self.payload())
         job = type("JobStub", (), {"tailored_cv": text, "tailored_keywords": "AWS"})()
         self.assertTrue(_has_cached_tailoring(job, self.master))
         job.tailored_cv = _reconstruct_tailored_text(self.sections, self.payload())

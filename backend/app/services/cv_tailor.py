@@ -2,9 +2,9 @@
 
 Python validates required fields and section/bullet counts, preserves immutable
 identity and employer details, and renders the model's wording without similarity,
-keyword-density, category-content, or original-length overrides. Empty-field
-fallbacks remain available to legacy reconstruction callers; successful model
-responses must be complete. API failures never produce Python-written rewrites.
+keyword-density, category-content, or original-length overrides. Experience
+parse/render failures are logged and raised instead of restoring master bullets.
+API failures never produce Python-written rewrites.
 """
 import json
 from difflib import SequenceMatcher
@@ -18,7 +18,7 @@ from pydantic import BaseModel, BeforeValidator, Field, ValidationError
 
 from app.config import get_settings
 from app.models import MasterCV
-from app.services.text_sections import BULLET_PREFIXES, is_bullet_line, looks_like_entry_header, strip_bullet
+from app.services.text_sections import BULLET_PREFIXES, is_bullet_line, looks_like_entry_header, strip_bullet, _DATE_RANGE_RE
 
 _SUMMARY_HINTS = ("summary", "objective", "profile")
 _SKILLS_HINTS = ("skill", "expertise", "competenc", "tools", "technolog")
@@ -41,41 +41,37 @@ def _is_experience_section(name: str) -> bool:
 
 
 def _split_experience_entries(content: str) -> list[dict] | None:
-    """Splits a Professional Experience section's raw text into per-employer
-    entries: {"header_line", "tagline", "bullets"}. header_line/tagline are
-    the immutable title/company/location/dates line (and the optional
-    one-line role blurb some resumes put before the bullets); bullets are
-    the ONLY part that ever reaches the model.
+    """Parse inline or wrapped employer headers and preserve bullet continuations.
 
-    Returns None if no entry-header-shaped line was found at all -- an
-    atypically-formatted section this heuristic can't confidently split.
-    Callers must treat None as "don't touch this section" rather than
-    guessing, since a wrong split could scramble which bullets belong to
-    which employer.
+    Metadata before the first bullet belongs to that employer. Subsequent
+    recognizable title/date lines start a new entry; they are never appended
+    to the preceding employer's last bullet.
     """
-    lines = [ln for ln in content.splitlines() if ln.strip()]
-    entries: list[dict] = []
-    current: dict | None = None
-
-    for line in lines:
-        if looks_like_entry_header(line):
-            current = {"header_line": line.strip(), "tagline": None, "bullets": []}
-            entries.append(current)
-            continue
-        if current is None:
-            # Content before any recognized entry header -- the format isn't
-            # what this heuristic expects, so don't guess at a split.
-            return None
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    entries = []
+    metadata = []
+    current = None
+    for line_number, line in enumerate(lines, 1):
         if is_bullet_line(line):
+            if metadata:
+                date_indexes = [i for i, value in enumerate(metadata) if _DATE_RANGE_RE.search(value)]
+                header_end = date_indexes[-1] + 1 if date_indexes else 1
+                current = {"header_line": " | ".join(metadata[:header_end]),
+                           "tagline": " ".join(metadata[header_end:]) or None, "bullets": []}
+                entries.append(current)
+                metadata = []
+            if current is None:
+                logger.error("Experience parsing failed at line %s: bullet has no employer header", line_number)
+                return None
             current["bullets"].append(strip_bullet(line))
-        elif current["tagline"] is None and not current["bullets"]:
-            current["tagline"] = line.strip()
-        elif current["bullets"]:
-            current["bullets"][-1] = f"{current['bullets'][-1]} {line.strip()}".strip()
+        elif metadata or current is None or looks_like_entry_header(line):
+            metadata.append(line)
         else:
-            current["tagline"] = f"{current['tagline']} {line.strip()}".strip()
-
-    return entries or None
+            current["bullets"][-1] += " " + line
+    if metadata or not entries:
+        logger.error("Experience parsing failed: no bullets for trailing header %r", " | ".join(metadata))
+        return None
+    return entries
 
 
 # "Cloud & Infrastructure: AWS, Azure, ..." -- label is everything before the
@@ -243,7 +239,12 @@ def template_context_from_text(text: str) -> dict:
         elif _is_skills_section(name) and (entries := _split_technical_expertise(content)):
             context["expertise_labels"] = [entry["label"] for entry in entries]
             context["technical_expertise"] = [entry["items"] for entry in entries]
-        elif _is_experience_section(name) and (entries := _split_experience_entries(content)):
+        elif _is_experience_section(name):
+            entries = _split_experience_entries(content)
+            if entries is None:
+                message = "Template experience parsing failed; refusing to render original text as a tailored section."
+                logger.error(message)
+                raise TailoringError(message)
             context["experience"] = entries
             context["experience_bullets"] = [entry["bullets"] for entry in entries]
         else:
@@ -263,7 +264,7 @@ CRITICAL GRAMMAR & READABILITY GUARDRAIL:
 
 STRICT TAILORING & CONTENT RULES:
 1. Depth: Materially rewrite Executive Summary, Technical Expertise, and ALL Experience Bullets. Do not just swap 1-2 words.
-2. Fact Integrity: Never invent employers, titles, degrees, dates, certifications, or clearance statuses. Do NOT state total years/tenure anywhere.
+2. Fact Integrity: NEVER change real historical facts (company names, job titles, dates, degrees, certifications). However, you MUST reframe the technical workstreams within bullet points to directly reflect the target JD's domain (e.g., pivot standard DevOps tasks into Data Engineering/Data Platform achievements if required by the JD).
 3. Summary: 2-4 sentences describing core mission & top matching tools. NEVER start with generic cliches ("Results-driven", "Seasoned professional", "Proven track record").
 4. Technical Expertise: Reorganize and swap generic tools with exact JD terms across the mapped categories:
    - Cloud & Infrastructure (providers, networking, databases)
@@ -271,8 +272,8 @@ STRICT TAILORING & CONTENT RULES:
    - Monitoring & Security (observability, logging, incident response, IAM)
    - Languages & Tools (languages, OS, CLIs, admin utilities)
 5. Bullets: Integrate 2-4 JD keywords per bullet naturally. Bold 2-4 short, high-value keywords/tools per item using **double asterisks**.
-6. Strict Counts: Maintain the exact array lengths and bullet counts provided in the input. Never add, delete, merge, or split bullets/categories.
-7. Invent experience, reframe achievements so the candidate stands out.
+6. Array Match: Return the exact same number of bullet points provided in the input JSON so the schema validates cleanly.
+7. Domain Adaptation: You are explicitly permitted to introduce tools, architectural patterns, and workflows from the JD into the bullet points to make the candidate look like a direct match for the role.
 
 IMMUTABLE FIELDS:
 - Return ONLY the dynamic `role_title` string for the target job title (no pipes or header keywords). Never rewrite name, contact info, or historical employer details.
@@ -469,32 +470,10 @@ def _has_total_years_experience_claim(text: str) -> bool:
 
 
 def _clean_field_text(text: str) -> str:
-    """Strips stray markdown code fences and LLM conversational notes from a
-    single returned string field (a bullet, the summary, ...)."""
-    lines = []
-    for line in (text or "").splitlines():
-        line = _normalize_bullet_marker(line)
-        stripped = line.strip()
-        if not stripped:
-            lines.append(line)
-            continue
-        if stripped.startswith("```"):
-            continue
-        lowered = stripped.lower()
-        if any(phrase in lowered for phrase in _META_PHRASES):
-            continue
-        line = _INLINE_META_PAREN_RE.sub("", line).rstrip()
-        while True:
-            stripped_line = _INLINE_META_PAREN_RE.sub("", line)
-            if stripped_line == line:
-                break
-            line = stripped_line
-        line = _remove_total_years_experience_claims(line)
-        line = _remove_job_requirement_phrases(line)
-        lines.append(line)
-    return _remove_job_requirement_phrases(
-        _remove_total_years_experience_claims("\n".join(lines).replace("```", ""))
-    ).strip()
+    """Remove only an enclosing code fence and outer whitespace, never prose."""
+    cleaned = (text or "").strip()
+    match = re.fullmatch(r"```[^\n]*\n(.*?)\n```", cleaned, re.S)
+    return match.group(1).strip() if match else cleaned
 
 
 def _capitalize_first_alpha(text: str) -> str:
@@ -522,16 +501,30 @@ def _prepare_summary_text(text: str) -> str:
 
 
 def _render_experience_entries(entries: list[dict], tailored_bullets: list[list[str]]) -> str:
+    if not isinstance(tailored_bullets, list) or len(tailored_bullets) > len(entries):
+        message = "Experience rendering failed: invalid model employer groups; no original bullets substituted."
+        logger.error(message)
+        raise TailoringError(message)
     blocks = []
     for i, entry in enumerate(entries):
         lines = [entry["header_line"]]
         if entry["tagline"]:
             lines.append(entry["tagline"])
 
-        original_bullets = entry["bullets"]
         reworded_raw = tailored_bullets[i] if i < len(tailored_bullets) else []
-        reworded = [b.strip() for b in reworded_raw if b.strip()]
-        bullets = reworded if reworded else original_bullets
+        if not isinstance(reworded_raw, list) or any(not isinstance(b, str) for b in reworded_raw):
+            message = f"Experience rendering failed for employer {i + 1}: expected a list of text bullets; no original bullets substituted."
+            logger.error(message)
+            raise TailoringError(message)
+        if not reworded_raw or any(not b.strip() for b in reworded_raw):
+            message = f"Experience rendering failed for employer {i + 1}: missing or empty model bullets (received {len(reworded_raw)}); no original bullets substituted."
+            logger.error(message)
+            raise TailoringError(message)
+        reworded = [b.strip() for b in reworded_raw]
+        if len(reworded) != len(entry["bullets"]):
+            logger.warning("Experience employer %s: expected %s bullets, received %s; retaining model wording",
+                           i + 1, len(entry["bullets"]), len(reworded))
+        bullets = reworded
         for bullet in bullets:
             lines.append(f"- {bullet}")
         blocks.append("\n".join(lines))
@@ -552,74 +545,7 @@ def _strip_stray_category_prefix(candidate: str) -> str:
 
 
 _DEVOPS_CATEGORY_HINTS = ("devops", "platform")
-_DEVOPS_ALLOWED_HINTS = (
-    "ansible",
-    "argo",
-    "argocd",
-    "argo cd",
-    "artifactory",
-    "arm/bicep",
-    "aws cdk",
-    "azure devops",
-    "bicep",
-    "bitbucket pipelines",
-    "buildkite",
-    "circleci",
-    "ci/cd",
-    "cloudformation",
-    "cloud development kit",
-    "codebuild",
-    "codecommit",
-    "codedeploy",
-    "codepipeline",
-    "configuration management",
-    "consul",
-    "container",
-    "container orchestration",
-    "cluster autoscaler",
-    "docker",
-    "docker compose",
-    "ecr",
-    "flux",
-    "fluxcd",
-    "git",
-    "github actions",
-    "gitlab ci",
-    "gitops",
-    "harbor",
-    "helm",
-    "hpa",
-    "iac",
-    "infrastructure as code",
-    "ingress",
-    "istio",
-    "jenkins",
-    "keda",
-    "kubernetes",
-    "kustomize",
-    "gradle",
-    "maven",
-    "nexus",
-    "nomad",
-    "npm",
-    "openshift",
-    "orchestration",
-    "packer",
-    "pipeline",
-    "platform",
-    "pulumi",
-    "rancher",
-    "release",
-    "release automation",
-    "blue/green",
-    "canary",
-    "service mesh",
-    "sonarqube",
-    "terragrunt",
-    "terraform",
-    "vault",
-    "zero-downtime",
-)
+
 _CLOUD_SERVICE_ONLY_HINTS = (
     "alb",
     "api gateway",
@@ -679,52 +605,7 @@ _CLOUD_SERVICE_ONLY_HINTS = (
     "vpc",
     "waf",
 )
-_CLOUD_CATEGORY_FORBIDDEN_HINTS = (
-    "ansible",
-    "argo",
-    "argocd",
-    "aws cdk",
-    "azure devops",
-    "bitbucket pipelines",
-    "circleci",
-    "ci/cd",
-    "cloud development kit",
-    "cloudformation",
-    "codebuild",
-    "codecommit",
-    "codedeploy",
-    "codepipeline",
-    "cluster autoscaler",
-    "docker",
-    "docker compose",
-    "envoy",
-    "flux",
-    "fluxcd",
-    "github actions",
-    "gitlab ci",
-    "gitops",
-    "helm",
-    "hpa",
-    "ingress",
-    "istio",
-    "jenkins",
-    "keda",
-    "kubernetes",
-    "kustomize",
-    "nomad",
-    "openshift",
-    "packer",
-    "pipeline",
-    "policy as code",
-    "pulumi",
-    "service mesh",
-    "sonarqube",
-    "terragrunt",
-    "terraform",
-    "tfsec",
-    "trivy",
-    "vault",
-)
+
 _MONITORING_CATEGORY_FORBIDDEN_HINTS = (
     "argo",
     "argocd",
@@ -816,62 +697,17 @@ def _dedupe_tool_items(parts: list[str]) -> list[str]:
 
 
 def _enforce_category_contract(label: str, candidate: str, original_items: str) -> str:
-    """Keeps category-specific cleanup deterministic after the model returns.
-    The high-risk case is DevOps & Platforms: local models often duplicate
-    AWS/Azure/GCP service clusters there after seeing them in a JD, even
-    though that line should stay focused on CI/CD, IaC, GitOps, and
-    containers."""
-    parts = _dedupe_tool_items(_split_tool_items(candidate))
-    if not parts:
-        return candidate
+    """Compatibility hook: category content is controlled by SYSTEM_PROMPT.
 
-    lowered_label = label.lower()
-    if any(hint in lowered_label for hint in _DEVOPS_CATEGORY_HINTS):
-        parts = [
-            part for part in parts
-            if not (
-                _contains_any(part, _CLOUD_SERVICE_ONLY_HINTS)
-                and not _contains_any(part, _DEVOPS_ALLOWED_HINTS)
-            )
-        ]
-        if not parts:
-            return original_items
-    elif "cloud" in lowered_label or "infrastructure" in lowered_label:
-        parts = [
-            part for part in parts
-            if _provider_for_item(part) is not None or not _contains_any(part, _CLOUD_CATEGORY_FORBIDDEN_HINTS)
-        ]
-    elif "monitor" in lowered_label or "security" in lowered_label:
-        parts = [
-            part for part in parts
-            if not _contains_any(part, _MONITORING_CATEGORY_FORBIDDEN_HINTS)
-        ]
-    elif "language" in lowered_label or "tools" in lowered_label:
-        parts = [
-            part for part in parts
-            if not _contains_any(part, _LANGUAGES_CATEGORY_FORBIDDEN_HINTS)
-        ]
-
-    return _join_tool_items(parts) if parts else original_items
+    Do not whitelist, blacklist, deduplicate, or substitute original skills.
+    Keep the model's domain-specific terms and ordering exactly as returned.
+    """
+    return candidate
 
 
 def _is_valid_category_rewording(candidate: str, entry: dict) -> bool:
-    """Guards against a real observed failure mode: the model echoing the
-    category LABEL back as if it were the items ("Cloud & Infrastructure:
-    Cloud & Infrastructure"), silently destroying that category's actual
-    tool list. Neither `_looks_like_leaked_key` (candidate isn't a bare
-    schema-key token) nor the count check used for bullets (there's no count
-    here, it's one string) catches this, so it needs its own check."""
-    if _looks_like_leaked_key(candidate):
-        return False
-    if candidate.strip().lower() == entry["label"].strip().lower():
-        return False
-    # A genuine rewording of a tool list shouldn't collapse to a fraction of
-    # the original's length -- that's a sign of truncation or the model
-    # substituting something degenerate rather than actually rephrasing.
-    if len(candidate) < 0.4 * len(entry["items"]):
-        return False
-    return True
+    """Any nonempty model-authored tool list is valid, regardless of its length."""
+    return bool(candidate and candidate.strip())
 
 
 def _render_technical_expertise(entries: list[dict], tailored_items: list[str]) -> str:
@@ -915,6 +751,10 @@ def _reconstruct_tailored_text(
     experience_entries = None
     if experience_idx is not None:
         experience_entries = _split_experience_entries(sections[experience_idx]["content"])
+        if experience_entries is None:
+            message = "Could not parse Professional Experience headers/bullets; original text will not be substituted."
+            logger.error(message)
+            raise TailoringError(message)
 
     skills_entries = None
     if skills_idx is not None:
@@ -955,6 +795,10 @@ def _build_prompt(
 return any experience_bullets entries)"
     if experience_idx is not None:
         experience_entries = _split_experience_entries(sections[experience_idx]["content"])
+        if experience_entries is None:
+            message = "Could not parse Professional Experience headers/bullets; original text will not be substituted."
+            logger.error(message)
+            raise TailoringError(message)
         if experience_entries:
             parts = []
             for i, entry in enumerate(experience_entries):
@@ -2234,23 +2078,8 @@ _LANGUAGE_TOOLS_CATEGORY_ALLOWED_HINTS = (
 
 
 def _keyword_fits_category(label: str, keyword: str) -> bool:
-    lowered_label = label.lower()
-    lowered_keyword = keyword.lower()
-    if any(hint in lowered_label for hint in _DEVOPS_CATEGORY_HINTS):
-        return _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS)
-    if "cloud" in lowered_label or "infrastructure" in lowered_label:
-        return (
-            _provider_for_item(keyword) is not None
-            or _keyword_matches_allowed_terms(keyword, _CLOUD_CATEGORY_ALLOWED_HINTS)
-        ) and not _contains_any(lowered_keyword, _CLOUD_CATEGORY_FORBIDDEN_HINTS)
-    if "monitor" in lowered_label or "security" in lowered_label:
-        return _keyword_matches_allowed_terms(keyword, _MONITORING_SECURITY_CATEGORY_ALLOWED_HINTS)
-    if "language" in lowered_label or "tools" in lowered_label:
-        return (
-            _keyword_matches_allowed_terms(keyword, _LANGUAGE_TOOLS_CATEGORY_ALLOWED_HINTS)
-            and not _contains_any(lowered_keyword, _LANGUAGES_CATEGORY_FORBIDDEN_HINTS)
-        )
-    return False
+    """The prompt chooses category placement; accept any nonempty domain term."""
+    return bool(keyword and keyword.strip())
 
 
 def _category_keyword_insertions(label: str, keywords: list[str], existing_items: str) -> list[str]:
@@ -2390,7 +2219,7 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
         return f"{stripped} {phrase}"
 
     if lowered_keyword != "ci/cd" and re.search(r"\bci/cd\s+pipelines?\s+with\b", text, re.IGNORECASE):
-        if _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS):
+        if _keyword_fits_category("DevOps & Platforms", keyword):
             candidate = re.sub(
                 r"\b(CI/CD\s+pipelines?)\b",
                 lambda match: f"{match.group(1)} and {keyword} workflows",
@@ -2402,7 +2231,7 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
                 return candidate
 
     if lowered_keyword != "ci/cd" and re.search(r"\bci/cd\s+pipelines?\b", text, re.IGNORECASE):
-        if _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS):
+        if _keyword_fits_category("DevOps & Platforms", keyword):
             candidate = re.sub(
                 r"\b(CI/CD\s+pipelines?)\b",
                 lambda match: f"{match.group(1)} with {keyword}",
@@ -2413,7 +2242,7 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
             if candidate != text and _keyword_match_count(candidate, [keyword]):
                 return candidate
 
-    devops_keyword = _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS)
+    devops_keyword = _keyword_fits_category("DevOps & Platforms", keyword)
     container_keyword = _keyword_matches_allowed_terms(
         keyword,
         (
@@ -2597,7 +2426,7 @@ def _inject_keyword_into_bullet(text: str, keyword: str) -> str:
     if lowered_keyword in {"ci/cd", "release automation", "devsecops"} and "pipeline" not in text.lower():
         return re.sub(r"\.$", f" through {keyword} delivery.", text, count=1)
 
-    if _keyword_matches_allowed_terms(keyword, _DEVOPS_ALLOWED_HINTS) and _contains_any(
+    if _keyword_fits_category("DevOps & Platforms", keyword) and _contains_any(
         lowered_text,
         ("pipeline", "deployment", "release", "rollback", "platform", "artifact", "registry"),
     ):

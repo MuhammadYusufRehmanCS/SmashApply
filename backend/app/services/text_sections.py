@@ -6,6 +6,10 @@ import re
 
 SECTION_KEYWORDS = {
     "summary",
+    "executive summary",
+    "technical expertise",
+    "additional",
+    "education & professional development",
     "professional summary",
     "objective",
     "profile",
@@ -48,7 +52,17 @@ def looks_like_heading(line: str) -> bool:
 # another year or "present"/"current"), not just any digit -- a bullet like
 # "reduced deployment time by 60%" or "managed 40+ AWS accounts" contains
 # digits too, and must NOT be mistaken for a job-entry boundary.
-_DATE_RANGE_RE = re.compile(r"(19|20)\d{2}\s*(?:[-–—]|to)\s*((19|20)\d{2}|present|current)", re.IGNORECASE)
+_DATE_RANGE_RE = re.compile(
+    r"(?:\b(?:19|20)\d{2}|\b\d{1,2}/(?:19|20)\d{2})\s*"
+    r"(?:[-\u2010-\u2015\u2212\ufffd]|to)\s*"
+    r"(?:(?:[A-Za-z]{3,9}\.?\s+)?(?:19|20)\d{2}|\d{1,2}/(?:19|20)\d{2}|present|current|now|ongoing)",
+    re.IGNORECASE,
+)
+_ROLE_TITLE_RE = re.compile(
+    r"^(?:(?:senior|junior|lead|staff|principal|associate)\s+)?"
+    r"[A-Za-z &/().-]{0,85}\b(?:engineer|administrator|developer|analyst|architect|consultant|manager)"
+    r"(?:\s+(?:I{1,3}|IV|V|[1-5]))?$", re.I,
+)
 
 
 def looks_like_entry_header(line: str) -> bool:
@@ -63,15 +77,19 @@ def looks_like_entry_header(line: str) -> bool:
     sent for tailoring, or a bullet's own text gets used as if it were a
     company/dates line."""
     stripped = line.strip()
-    if not stripped or len(stripped) > 100:
+    if not stripped or len(stripped) > 400:
         return False
     if stripped.startswith(BULLET_PREFIXES):
         return False
     # Pipe-delimited "Title | Company | Location | Dates" is the dominant
     # convention this targets -- a strong, specific signal on its own.
-    if " | " in stripped or stripped.count("|") >= 2:
+    if " | " in stripped or stripped.count("|") >= 2 or (
+        "|" in stripped and _ROLE_TITLE_RE.fullmatch(stripped.split("|", 1)[0].strip())
+    ):
         return True
-    return bool(_DATE_RANGE_RE.search(stripped))
+    if _DATE_RANGE_RE.search(stripped) or _ROLE_TITLE_RE.fullmatch(stripped):
+        return True
+    return bool(re.search(r"\b(?:engineer|administrator|developer|analyst|architect|consultant|manager)\b.*?(?:\s+at\s+|\s+[-\u2013\u2014]\s+)", stripped, re.I))
 
 
 def is_bullet_line(line: str) -> bool:
@@ -98,7 +116,15 @@ def segment_sections(raw_text: str) -> list[dict]:
     current_lines: list[str] = []
 
     for line in lines:
-        if looks_like_heading(line):
+        is_heading = looks_like_heading(line)
+        in_experience = any(word in current_name.lower() for word in ("experience", "employment", "work history"))
+        previous = next((value for value in reversed(current_lines) if value.strip()), "")
+        # Uppercase titles and the company line below them are employer
+        # metadata, not new top-level resume sections.
+        if (in_experience and line.strip().lower().rstrip(":") not in SECTION_KEYWORDS
+                and (looks_like_entry_header(line) or looks_like_entry_header(previous))):
+            is_heading = False
+        if is_heading:
             if current_lines:
                 sections.append({"name": current_name, "content": "\n".join(current_lines).strip()})
             current_name = line.strip().title()
