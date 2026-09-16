@@ -13,6 +13,10 @@ from pypdf import PdfReader
 class CVOverflowError(ValueError):
     """Content cannot fit the approved single-page design."""
 
+    def __init__(self, message: str, *, measurements: dict | None = None):
+        super().__init__(message)
+        self.measurements = measurements
+
 
 def _inline(value: str) -> Markup:
     return Markup(re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", str(escape(value))))
@@ -87,15 +91,16 @@ def build_ats_pdf(content: dict | str, layout: dict | None = None) -> bytes:
     # subprocesses. Use a private loop without changing the server's policy.
     loop_factory = asyncio.ProactorEventLoop if sys.platform == "win32" else asyncio.new_event_loop
     with asyncio.Runner(loop_factory=loop_factory) as runner:
-        pdf = runner.run(_render_pdf(html))
+        pdf, measurements = runner.run(_render_pdf(html))
     if len(PdfReader(io.BytesIO(pdf)).pages) != 1:
         raise CVOverflowError(
-            "CV exceeds the fixed one-page template. Shorten the summary or bullets and retry."
+            "CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.",
+            measurements=measurements,
         )
     return pdf
 
 
-async def _render_pdf(html: str) -> bytes:
+async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
     from playwright.async_api import async_playwright
 
     async with async_playwright() as playwright:
@@ -119,7 +124,60 @@ async def _render_pdf(html: str) -> bytes:
                     headline.style.fontSize = `${Math.floor(size * available / width * 100) / 100}px`;
                 }
             }""")
-            return await page.pdf(prefer_css_page_size=True, print_background=True,
-                                  display_header_footer=False)
+            pdf = await page.pdf(prefer_css_page_size=True, print_background=True,
+                                 display_header_footer=False)
+            # Measure only after exporting. The diagnostic DOM never changes the
+            # delivered PDF, font sizes, spacing, margins, or approved template.
+            measurements = None
+            if len(PdfReader(io.BytesIO(pdf)).pages) != 1:
+                measurements = await _measure_wording(page)
+            return pdf, measurements
         finally:
             await browser.close()
+
+
+async def _measure_wording(page) -> dict:
+    return await page.evaluate("""() => {
+        const rule = [...document.styleSheets].flatMap(s => [...s.cssRules])
+            .find(r => r.type === CSSRule.PAGE_RULE);
+        const px = value => {
+            const probe = document.createElement('div');
+            probe.style.width = value;
+            document.body.appendChild(probe);
+            const width = probe.getBoundingClientRect().width;
+            probe.remove();
+            return width;
+        };
+        const dimensions = rule.style.getPropertyValue('size').trim().split(/\\s+/);
+        const width = px(dimensions[0]) - px(rule.style.marginLeft) - px(rule.style.marginRight);
+        const available = px(dimensions[1]) - px(rule.style.marginTop) - px(rule.style.marginBottom);
+        document.body.style.width = `${width}px`;
+        const fields = [];
+        const add = (element, path, prefix = '') => {
+            const style = getComputedStyle(element);
+            const canvas = document.createElement('canvas').getContext('2d');
+            canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+            const text = element.textContent.trim();
+            const content = prefix ? text.slice(prefix.length).trim() : text;
+            const lineHeight = parseFloat(style.lineHeight);
+            const height = element.getBoundingClientRect().height;
+            fields.push({path, lines: Math.round(height / lineHeight),
+                height, line_height: lineHeight, width: element.getBoundingClientRect().width,
+                prefix_width: canvas.measureText(prefix + ' ').width,
+                average_char_width: canvas.measureText(content).width / Math.max(1, content.length),
+                characters: content.length});
+        };
+        for (const section of document.querySelectorAll('body > section')) {
+            const heading = section.querySelector('h2')?.textContent.trim();
+            if (heading === 'Executive Summary') add(section.querySelector('p'), 'summary');
+            if (heading === 'Technical Expertise') {
+                [...section.querySelectorAll('li')].forEach((li, i) =>
+                    add(li, `technical_expertise.${i}`, li.querySelector('strong').textContent));
+            }
+        }
+        [...document.querySelectorAll('.experience-entry')].forEach((entry, i) =>
+            [...entry.querySelectorAll('li')].forEach((li, j) => add(li, `experience_bullets.${i}.${j}`)));
+        const height = document.body.getBoundingClientRect().height;
+        return {available_height: available, content_height: height,
+            fixed_height: height - fields.reduce((sum, f) => sum + f.height, 0), fields};
+    }""")

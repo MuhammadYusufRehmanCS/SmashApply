@@ -389,7 +389,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
                 request.side_effect = failure
                 with self.assertRaises(TailoringError):
                     await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
-                self.assertEqual(request.await_count, 2)
+                self.assertEqual(request.await_count, 1 if isinstance(failure, LLMExecutionError) else 2)
 
     async def test_tailor_route_requests_fallback_on_retry_failure(self):
         job = type("Job", (), {"id": 1, "title": "Systems Engineer", "company": "Acme", "description": "Service operations"})()

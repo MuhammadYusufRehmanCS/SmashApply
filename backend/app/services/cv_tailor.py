@@ -187,9 +187,7 @@ class _TailoredPayload(BaseModel):
 
 
 class TailoringError(RuntimeError):
-    """Raised for local CV issues or for a single failed LLM attempt.
-    `tailor_cv()` catches per-attempt model failures, retries once, and only
-    returns non-cacheable fallback text after both attempts fail."""
+    """Raised when generation, structure validation, or fixed-layout fitting fails."""
 
 
 class LLMExecutionError(TailoringError):
@@ -271,9 +269,41 @@ STRICT TAILORING & CONTENT RULES:
    - DevOps & Platforms (CI/CD, IaC, containers, orchestration, release tools ONLY)
    - Monitoring & Security (observability, logging, incident response, IAM)
    - Languages & Tools (languages, OS, CLIs, admin utilities)
-5. Bullets: Integrate 2-4 JD keywords per bullet naturally. Bold 2-4 short, high-value keywords/tools per item using **double asterisks**.
+5. Bullets: Integrate 2-3 explicit JD tools, concepts, or methodologies per bullet that are absent from the base resume. Bold 2-4 short, high-value keywords/tools per item using **double asterisks**.
 6. Array Match: Return the exact same number of bullet points provided in the input JSON so the schema validates cleanly.
 7. Domain Adaptation: You are explicitly permitted to introduce tools, architectural patterns, and workflows from the JD into the bullet points to make the candidate look like a direct match for the role.
+
+
+STRICT MANDATE: RE-ENGINEER BULLET CONTENT TO MATCH THE TARGET JD
+1. DO NOT JUST USE SYNONYMS: Simply swapping verbs (for example, "managed" to "orchestrated") is INVALID. Introduce new technical scope, tools, and workstreams directly from the target Job Description into EVERY bullet.
+2. INJECT TARGET JD CONTEXT: For every bullet, select 2-3 explicit tools, concepts, or methodologies from the JD that do not exist on the candidate's base resume. Seamlessly weave them into the accomplishment, explaining how they contribute to the target-domain workstream. Use the JD itself as the source; do not merely repeat the base resume's tools or append a keyword list.
+   Example when the target JD requests Data Engineering:
+   BASE: "Built CI/CD pipelines using GitHub Actions to automate deployment."
+   INVALID (SYNONYMS): "Engineered continuous integration workflows via GitHub Actions to streamline releases."
+   REQUIRED (WORKSTREAM INJECTION): "Architected CI/CD pipelines using GitHub Actions and Terraform to automate streaming data ingestion, orchestration workflows, and schema deployment."
+3. PROTECTED HISTORICAL FACTS: Do not change company names, official historical job titles, employment dates, degrees, or certifications. Everything inside each bullet must be aggressively adapted to sound like a direct domain match for the target role. Do not mistake the base bullet's technical scope for immutable historical metadata.
+4. RIGID COUNT MATCH: Return EXACTLY the same number of bullets per employer as supplied. Preserve employer order; never add, remove, merge, or split bullets. Before returning the JSON, verify every bullet introduces the requested JD-specific scope and that each employer's bullet count matches its input.
+
+
+ENGINEERING WORKSTREAM CREATION MANDATE:
+Do NOT perform superficial keyword insertion. Completely re-imagine every bullet as a concise, end-to-end engineering initiative that naturally incorporates the target domain's core architecture and workflows. The requested JD concepts must form a cohesive system, not an appended list of tools.
+
+NARRATIVE STRUCTURE FOR EVERY BULLET:
+Every bullet MUST contain all three elements in this order, written as one flowing accomplishment without labels:
+- ACTION & DOMAIN SCOPE: Begin with a strong architectural verb and establish a concrete domain initiative using target JD concepts.
+- ARCHITECTURAL IMPLEMENTATION: Explain HOW it was built through a plausible technical workstream, design pattern, or system, such as automated data validation pipelines, policy-as-code enforcement, or self-service developer templates. Connect the tools through their actual roles in the workflow.
+- BUSINESS/OPERATIONAL IMPACT: Conclude with a credible engineering result, such as reducing operational toil, ensuring auditability, accelerating onboarding, or improving fault tolerance.
+
+BELIEVABLE WORKSTREAM INVENTION:
+Invent realistic project scopes and platform capabilities aligned with the candidate's actual job level and the target JD's technical goals. Respect the protected historical fields and exact per-employer bullet counts specified above. Combine isolated JD tools into cohesive workflows, with credible implementation detail and a clear outcome.
+INVALID: "Used Terraform, CI/CD, and Data Quality."
+REQUIRED: "Architected automated data quality gatekeeping within CI/CD pipelines using Terraform and policy-as-code guardrails to catch schema drift before production deployment."
+
+READABILITY & FLOW:
+Write an authentic, high-impact resume in the voice of an industry expert. Avoid awkward, dense keyword dumps. Keep the tone professional and natural, focused on system integrity, reliability, and business execution. Vary the engineering initiatives across bullets; do not repeat one generic project with different tools. Compress redundant phrasing to fit the one-page design, but retain the initiative, implementation, and impact in every bullet.
+
+MEASURED FITTING PASSES:
+When the request supplies measured field limits and a CURRENT TAILORED CANDIDATE, edit that candidate instead of generating new initiatives again. The listed character limits are hard space constraints. Preserve the existing domain initiative, implementation, and outcome in compact language within those limits. Copy unlisted fields exactly; they have already been tailored and fit. Do not expand other sections to compensate for shortening one field. Never omit bullets or output sentence fragments.
 
 IMMUTABLE FIELDS:
 - Return ONLY the dynamic `role_title` string for the target job title (no pipes or header keywords). Never rewrite name, contact info, or historical employer details.
@@ -830,9 +860,9 @@ any technical_expertise entries)"
     prompt = (
         f"{SYSTEM_PROMPT}\n\n"
         "FIXED ONE-PAGE HTML TEMPLATE: Make wording edits. Keep exactly the same "
-        "category, employer and bullet counts and their order. Each rewritten field must "
-        "be no longer than its original text (excluding ** markers). Prefer concise "
-        "substitutions; never add sentences or expand bullets to insert keywords. "
+        "category, employer and bullet counts and their order. Write concise achievements "
+        "that introduce the JD-specific scope required by SYSTEM_PROMPT while fitting "
+        "the one-page design. Do not limit rewrites to substitutions in the original sentence. "
         "summary, technical_expertise and experience_bullets map directly to Jinja2 variables.\n\n"
         f"--- TARGET JOB ---\n"
         f"Job Title: {job_title}\n"
@@ -2891,6 +2921,8 @@ async def tailor_cv(
                 reject_unchanged_categories=False,
             )
             return _result_from_payload(sections, payload, cacheable=True, target_job_title=job_title)
+        except LLMExecutionError:
+            raise
         except TailoringError as exc:
             if attempt == 0:
                 logging.warning("CV tailoring rejected; requesting a complete rewrite: %s", exc)
@@ -2898,8 +2930,10 @@ async def tailor_cv(
                     "\n\nThe previous response failed validation: " + str(exc)
                     + "\nReturn a complete corrected JSON response. Reframe EVERY experience bullet "
                     "for this job description; preserve employer order and bullet counts. "
-                    "Do not merely swap opening verbs or append keywords. Keep bullets concise "
-                    "(normally 15-25 words) and the summary 45-60 words for the one-page design."
+                    "Do not merely swap opening verbs or append keywords. Every bullet must retain "
+                    "action and domain scope, architectural implementation, and operational impact. "
+                    "Keep bullets concise (normally 20-28 words) and the summary 35-45 words "
+                    "for the one-page design."
                 )
                 continue
             # Never substitute deterministic/master wording for a model response.

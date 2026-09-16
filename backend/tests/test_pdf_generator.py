@@ -82,8 +82,13 @@ class PDFGeneratorTests(unittest.TestCase):
     def test_overflow_is_rejected_without_truncation(self):
         data = template_context_from_text(CV)
         data['experience_bullets'][0] = ['A long accomplishment describing production systems.'] * 120
-        with self.assertRaises(CVOverflowError):
+        with self.assertRaises(CVOverflowError) as caught:
             build_ats_pdf(data)
+        measurements = caught.exception.measurements
+        self.assertGreater(measurements['content_height'], measurements['available_height'])
+        self.assertAlmostEqual(measurements['available_height'], (792.12 - 36 - 54) * 4 / 3, delta=0.1)
+        self.assertEqual(len([f for f in measurements['fields']
+                              if f['path'].startswith('experience_bullets')]), 120)
 
     def test_rendered_design_matches_master_measurements(self):
         data = template_context_from_text(CV)

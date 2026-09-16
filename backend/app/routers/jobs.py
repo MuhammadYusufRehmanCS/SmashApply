@@ -1,5 +1,6 @@
 import json
 import logging
+from uuid import uuid4
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +12,7 @@ from app.database import get_db
 from app.models import Job, MasterCV
 from app.roles import PRIMARY_ROLE_DEFAULT
 from app.schemas import JobOut, ScrapeRequest, ScrapeResult, TailorResult
-from app.services.cv_tailor import TailorCVResult, TailoringError, compute_match_score, tailor_cv, has_reframed_experience
+from app.services.cv_tailor import TailorCVResult, TailoringError, LLMExecutionError, compute_match_score, tailor_cv, has_reframed_experience
 from app.services.job_scraper import job_dedupe_keys, scrape_for_roles, scrape_role_names, cv_search_roles
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
 from app.services.cv_fitting import fit_tailored_cv
@@ -112,6 +113,34 @@ def _has_cached_tailoring(job: Job, cv: MasterCV | None = None) -> bool:
     return present and (cv is None or has_reframed_experience(job.tailored_cv, json.loads(cv.sections_json)))
 
 
+def _tailoring_failure_detail(exc: Exception) -> str:
+    """Report the failed stage without exposing provider bodies or CV text."""
+    chain = []
+    current = exc
+    while current is not None and all(current is not item for item in chain):
+        chain.append(current)
+        current = current.__cause__
+    if any(isinstance(item, LLMExecutionError) for item in chain):
+        status = next((getattr(item, "status_code", None) for item in chain
+                       if getattr(item, "status_code", None)), None)
+        if status == 401:
+            return "OpenAI rejected the API key. Check OPENAI_API_KEY in backend/.env."
+        if status == 429:
+            return "OpenAI rejected the request due to a rate or quota limit. Check API billing and limits."
+        if status in (400, 403, 404):
+            return "OpenAI rejected the configured model or request. Check model access and the backend error log."
+        return "The OpenAI generation request failed or returned no usable response. Check the backend error log."
+    if any(isinstance(item, CVOverflowError) for item in chain):
+        return "Generated wording still exceeds one page after three shortening attempts."
+    # These messages originate in our structural validator, never in model prose.
+    for item in reversed(chain):
+        message = str(item)
+        if message.startswith(("Model returned ", "Model did not return ",
+                               "Could not parse Professional Experience", "Master CV has no parsed sections")):
+            return message
+    return "Generated CV failed structure validation. Check the backend error log for the rejected field."
+
+
 async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bool = False,
                       candidate: TailorCVResult | None = None) -> TailorCVResult:
     try:
@@ -143,7 +172,8 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bo
             db.refresh(job)
     except TailoringError as exc:
         # Never cache or deliver a CV that failed the wording or page-fit checks.
-        logging.exception("Tailoring failed")
+        error_id = uuid4().hex[:12]
+        logging.exception("Tailoring failed for job %s [error %s]", job.id, error_id)
         db.rollback()
         # A failed regeneration must not take away a previously completed CV.
         # Only reuse this job's own validated, reframed, one-page version.
@@ -160,7 +190,7 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bo
                 )
         raise HTTPException(
             status_code=502,
-            detail="Could not finish a fully reframed one-page CV. Your saved CV and design were preserved. Please retry.",
+            detail=f"{_tailoring_failure_detail(exc)} Your saved CV and design were preserved. Error reference: {error_id}.",
         ) from exc
     except Exception as exc:
         # Anything else (a bug in our own reconstruction code, a bad DB
