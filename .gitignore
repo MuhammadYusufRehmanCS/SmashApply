@@ -21,3 +21,10 @@ Thumbs.db
 # Editors
 .vscode/
 .idea/
+
+# Local Gmail OAuth secrets and processing history
+credentials.json*
+token.json
+token.tmp
+inbox_processed.json
+inbox_processed.tmp

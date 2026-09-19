@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import init_db
-from app.routers import cv, jobs
+from app.routers import cv, inbox, jobs
 from app.routers.jobs import MasterCvUnavailableError
 
 # Root logger, explicitly to stdout -- uvicorn's default log config only
@@ -44,6 +44,7 @@ app.add_middleware(
 
 app.include_router(jobs.router)
 app.include_router(cv.router)
+app.include_router(inbox.router)
 
 
 @app.exception_handler(MasterCvUnavailableError)

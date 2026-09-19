@@ -112,6 +112,44 @@ Frontend: `http://localhost:3000`. Backend: `http://localhost:8000`.
 
 ## API overview
 
+### Email referrals (local desktop)
+
+Install the updated `backend/requirements.txt`, enable the Gmail API in your Google
+Cloud project, configure the OAuth consent screen (add your account as a test user
+if the app is in testing), and download a **Desktop app** OAuth client as
+`credentials.json` in the repository root. `credentials.json.json` is also accepted
+as a fallback for Windows downloads with a duplicated extension.
+
+Upload your master CV, then click **Fetch Latest Email Referral & Tailor Resume**.
+On first use, complete Google consent in the browser on the backend computer.
+The app saves and refreshes `token.json` locally. This desktop callback flow is for
+a locally running backend, not a remote or container-hosted OAuth deployment.
+
+The endpoint `POST /api/inbox/tailor-latest` finds the latest unread inbox message
+matching `is:unread (referral OR "job description" OR opportunity OR role)`, extracts
+plain text or parsed HTML from nested MIME bodies, and runs the existing OpenAI
+tailoring and PDF fitting pipeline. Plain text is preferred in multipart alternatives.
+File attachments are skipped; attachment-backed inline text/HTML bodies are fetched.
+The resulting PDF appears in an embedded preview with a download link.
+
+The UI first calls `POST /api/inbox/extract-latest`, which uses local regex parsing
+for `Job Title ::`, `Duration ::`, and `Job Summary:` / `Job Description:`. It returns
+`job_title`, `sender` (from the email From header), `duration`, and `jd_text`.
+The JD includes the first summary/description heading through the end of the body;
+unstructured emails retain their full body, and absent metadata has explicit fallbacks.
+No LLM is called during extraction. The button displays the extracted title and sender
+before posting that metadata to `POST /api/inbox/tailor` for resume generation.
+Both stages reject short JDs before generation. `/tailor-latest` remains available
+as a combined endpoint for existing clients.
+
+Gmail authorization uses `gmail.modify`. Existing read-only tokens automatically
+trigger new consent. Each fetched message is marked read before returning, including
+empty or malformed bodies. Empty or fewer-than-50-character JDs return HTTP 422;
+an empty inbox also returns 422 with a distinct message. If tailoring fails, mark
+that email unread in Gmail to retry it. Local processing history is no longer used.
+OAuth files remain ignored by Git and Docker. Run one backend worker for this local
+workflow; concurrent requests within the worker return a clear busy response.
+
 | Method | Path                          | Purpose                                              |
 |--------|--------------------------------|-------------------------------------------------------|
 | POST   | `/api/cv/upload`              | Upload Master CV (.pdf); parses text + layout profile |

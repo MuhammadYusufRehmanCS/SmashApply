@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { FileText, Loader2, Search } from "lucide-react";
 
 import { InspectorPanel } from "@/components/inspector-panel";
@@ -38,6 +39,30 @@ export default function DashboardPage() {
   const [tailoringId, setTailoringId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [fetchingEmail, setFetchingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<string | null>(null);
+  const [emailPreview, setEmailPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => { if (emailPreview) URL.revokeObjectURL(emailPreview); };
+  }, [emailPreview]);
+
+  async function handleEmailReferral() {
+    setFetchingEmail(true);
+    setEmailStatus("Checking Gmail...");
+    setActionError(null);
+    try {
+      const referral = await api.extractLatestEmail();
+      flushSync(() => setEmailStatus(`Successfully extracted ${referral.job_title} from ${referral.sender} — Tailoring Resume...`));
+      const blob = await api.tailorEmail(referral);
+      setEmailPreview(URL.createObjectURL(blob));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFetchingEmail(false);
+      setEmailStatus(null);
+    }
+  }
 
   const totalApplied = useMemo(() => jobs.filter((job) => job.applied).length, [jobs]);
   const averageMatchScore = useMemo(() => {
@@ -254,13 +279,34 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-white/10 px-4 py-2">
+        <button
+          type="button"
+          onClick={handleEmailReferral}
+          disabled={fetchingEmail || uploading || !masterCv}
+          className="flex items-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
+        >
+          {fetchingEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {emailStatus ?? "Fetch Latest Email Referral & Tailor Resume"}
+        </button>
+        <span role="status" className="text-xs text-zinc-400">
+          {fetchingEmail ? "Checking Gmail and tailoring your resume. Complete Google sign-in if prompted." : !masterCv ? "Upload your master CV to get started." : "Connect Gmail on your first use."}
+        </span>
+        {emailPreview && <button type="button" onClick={() => setEmailPreview(null)} className="ml-auto text-xs text-zinc-300 underline">Close preview</button>}
+      </div>
+
       {actionError && (
-        <div className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-4 py-1.5 text-xs text-red-400">
+        <div role="alert" className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-4 py-1.5 text-xs text-red-400">
           {actionError}
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 border-t border-white/[0.03]">
+      {emailPreview ? (
+        <section aria-label="Tailored email referral resume" className="flex min-h-0 flex-1 flex-col gap-2 p-4">
+          <a href={emailPreview} download="Tailored_Email_Referral.pdf" className="self-start text-sm text-emerald-300 underline">Download tailored resume PDF</a>
+          <iframe title="Tailored resume PDF preview" src={emailPreview} className="min-h-0 w-full flex-1 rounded-md border border-white/10 bg-white" />
+        </section>
+      ) : <div className="flex min-h-0 flex-1 border-t border-white/[0.03]">
         <section className="w-[65%] min-w-0 overflow-y-auto border-r border-white/10 bg-[#090A0D]">
           <JobTable
             jobs={jobs}
@@ -283,7 +329,7 @@ export default function DashboardPage() {
             onDownload={handleDownload}
           />
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }
