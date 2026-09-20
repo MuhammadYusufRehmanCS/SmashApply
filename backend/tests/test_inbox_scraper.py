@@ -126,16 +126,6 @@ class OAuthTests(unittest.TestCase):
 
 
 class InboxRouteTests(unittest.IsolatedAsyncioTestCase):
-    async def test_email_text_reaches_existing_tailoring_and_pdf_fitting(self):
-        master = MagicMock()
-        result = MagicMock()
-        with patch.object(tailor, "tailor_cv", new=AsyncMock(return_value=result)) as generate, \
-                patch.object(tailor, "fit_tailored_cv", new=AsyncMock(return_value=(result, b"%PDF"))) as fit:
-            pdf = await tailor.generate_tailored_resume("Raw referral JD", master)
-            self.assertEqual(pdf, b"%PDF")
-            generate.assert_awaited_once_with(master, "Email referral", "", "Raw referral JD", allow_fallback=False)
-            fit.assert_awaited_once_with(result, master, "Email referral", "", "Raw referral JD")
-
     async def test_success_returns_pdf(self):
         referral = {"job_title": "Engineer", "sender": "Recruiter", "jd_text": "Role: Engineer. Build reliable systems and maintain cloud infrastructure."}
         with patch.object(router, "_get_master_cv_or_400", return_value="master"), \

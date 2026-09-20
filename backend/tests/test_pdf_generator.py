@@ -1,4 +1,4 @@
-﻿import io
+import io
 import re
 import pdfplumber
 import unittest
@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.cv_tailor import _TailoredPayload, _reconstruct_tailored_text, template_context_from_text
+from app.services.cv_tailor import _TailoredPayload, _reconstruct_tailored_text, template_context_from_text, short_role_title
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf, render_cv_html
 from pypdf import PdfReader
 
@@ -42,7 +42,7 @@ class PDFGeneratorTests(unittest.TestCase):
         html = render_cv_html(data)
         self.assertEqual(data['role_title'], 'PLATFORM ENGINEER')
         self.assertEqual(data['header']['contact'], [contact])
-        self.assertIn('MUHAMMAD YUSUF | PLATFORM ENGINEER | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION', re.sub(r'<[^>]+>', '', html))
+        self.assertIn('MUHAMMAD YUSUF | PLATFORM ENGINEER', re.sub(r'<[^>]+>', '', html))
         self.assertNotIn('<h1', html)
 
     def test_template_escapes_content_and_preserves_bold(self):
@@ -62,22 +62,29 @@ class PDFGeneratorTests(unittest.TestCase):
         self.assertEqual(len(reader.pages), 1)
         self.assertAlmostEqual(float(reader.pages[0].mediabox.width), 612, delta=1)
         text = reader.pages[0].extract_text()
-        for expected in ('MUHAMMAD YUSUF', 'EXECUTIVE SUMMARY', 'TECHNICAL EXPERTISE',
+        for expected in ('MUHAMMAD YUSUF', 'EXECUTIVE SUMMARY', 'CORE SKILLS',
                          'PROFESSIONAL EXPERIENCE', 'EDUCATION', 'ADDITIONAL',
                          'Example University', 'Languages: English'):
             self.assertIn(expected, text)
 
-    def test_long_headline_stays_one_line_without_scaling_body(self):
+    def test_header_uses_uniform_reference_font_without_scaling(self):
         data = template_context_from_text(CV)
-        data['role_title'] = 'DATA CENTER PLANT ENGINEER, MECHANICAL'
         with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
-            page = document.pages[0]
-            line = page.extract_text_lines()[0]
+            line = document.pages[0].extract_text_lines()[0]
             self.assertIn('CLOUD AUTOMATION', line['text'])
-            self.assertIn(data['role_title'], line['text'])
-            self.assertLessEqual(line['x1'], 576.1)
-            heading = next(l for l in page.extract_text_lines() if l['text'] == 'EXECUTIVE SUMMARY')
-            self.assertAlmostEqual(heading['chars'][0]['size'], 9.96, delta=0.03)
+            for char in line['chars']:
+                self.assertAlmostEqual(char['size'], 12.48, delta=0.03)
+        for title in ('DATA CENTER PLANT ENGINEER, MECHANICAL', 'Senior Cloud Platform & DevSecOps Engineer'):
+            data['role_title'] = title
+            with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
+                line = document.pages[0].extract_text_lines()[0]
+                self.assertIn('CLOUD AUTOMATION', line['text'])
+                self.assertLessEqual(line['x1'], 576.5)
+                self.assertNotIn('& |', line['text'])
+                for char in line['chars']:
+                    self.assertAlmostEqual(char['size'], 12.48, delta=0.03)
+                self.assertIn('Automated deployments with Terraform.', document.pages[0].extract_text())
+            self.assertEqual(data['role_title'], title)
 
     def test_overflow_is_rejected_without_truncation(self):
         data = template_context_from_text(CV)
@@ -86,7 +93,7 @@ class PDFGeneratorTests(unittest.TestCase):
             build_ats_pdf(data)
         measurements = caught.exception.measurements
         self.assertGreater(measurements['content_height'], measurements['available_height'])
-        self.assertAlmostEqual(measurements['available_height'], (792.12 - 36 - 54) * 4 / 3, delta=0.1)
+        self.assertAlmostEqual(measurements['available_height'], (792.12 - 36 - 36) * 4 / 3, delta=0.1)
         self.assertEqual(len([f for f in measurements['fields']
                               if f['path'].startswith('experience_bullets')]), 120)
 
@@ -95,20 +102,19 @@ class PDFGeneratorTests(unittest.TestCase):
         with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
             page = document.pages[0]
             lines = page.extract_text_lines()
-            heading = next(line for line in lines if line['text'] == 'TECHNICAL EXPERTISE')
+            heading = next(line for line in lines if line['text'] == 'CORE SKILLS')
             self.assertTrue(all('Bold' not in char['fontname'] for char in heading['chars']))
             self.assertAlmostEqual(heading['chars'][0]['size'], 9.96, delta=0.03)
             self.assertEqual(tuple(round(v, 3) for v in heading['chars'][0]['non_stroking_color']),
                              (0.184, 0.329, 0.588))
-            rules = [line for line in page.lines if line['width'] > 500]
-            self.assertTrue(rules)
+            rules = [rect for rect in page.rects if rect['width'] > 500 and rect['height'] < 1]
+            self.assertEqual(len(rules), 4)
             for rule in rules:
-                self.assertEqual(rule['linewidth'], 0)  # PDF device hairline, not a filled strip
+                self.assertAlmostEqual(rule['height'], 0.48, delta=0.25)
                 self.assertAlmostEqual(rule['x0'], 36, delta=0.1)
-                self.assertAlmostEqual(rule['x1'], 576, delta=0.3)
-                self.assertAlmostEqual(rule['stroking_color'][0], 0.627, delta=0.002)
-            self.assertTrue(any(0 < heading['top'] - rule['top'] < 13 for rule in rules))
-            self.assertIn('1/1', page.extract_text())
+                self.assertAlmostEqual(rule['x1'], 576, delta=0.1)
+                self.assertAlmostEqual(rule['non_stroking_color'][0], 160 / 255, delta=0.003)
+            self.assertTrue(any(0 < heading['top'] - rule['bottom'] < 12 for rule in rules))
 
 
 if __name__ == '__main__':

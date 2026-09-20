@@ -1,0 +1,10 @@
+  ▲ Next.js 14.2.35
+  - Local:        http://127.0.0.1:3000
+  - Network:      http://127.0.0.1:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 7.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 967ms (493 modules)
+ GET / 200 in 1701ms

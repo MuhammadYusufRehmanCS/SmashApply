@@ -31,8 +31,8 @@ async def request_wording_replacements(settings, fields: dict, title: str) -> di
                 'The visible-character limits are mandatory and INCLUDE spaces and punctuation '
                 '(exclude paired ** emphasis markers). Aim 15% below each limit. '
                 'Keep each bullet a complete accomplishment: action, implementation, outcome. '
-                'Keep its target-domain meaning; do not invent a new or longer initiative. '
-                'Use direct verbs and short clauses. Summary: two brief sentences. Skills: a short '
+                'Keep its target-domain meaning; do not invent new facts, metrics, tools, frameworks or initiatives. '
+                'Use direct verbs and short clauses. Summary: at most 25 words and two physical lines. Skills: a short '
                 'comma-separated tool list, WITHOUT a category label. Preserve useful bold emphasis. '
                 'Do not output headings, explanations, or extra fields. Never cut off a sentence.')},
             {'role': 'user', 'content': json.dumps({

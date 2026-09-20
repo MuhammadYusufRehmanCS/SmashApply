@@ -68,12 +68,12 @@ class CvTailorTests(unittest.TestCase):
 
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
         self.assertIn("Every bullet MUST", SYSTEM_PROMPT)
-        self.assertRegex(SYSTEM_PROMPT, r"Simply swapping verbs[^\n]+INVALID generation")
-        self.assertIn("Return EXACTLY the same number of bullets per employer", SYSTEM_PROMPT)
+        self.assertIn("Never invent metrics, dates, employers", SYSTEM_PROMPT)
+        self.assertIn("Arqon Consulting = EXACTLY 4 bullets", SYSTEM_PROMPT)
 
     def test_system_prompt_requires_readable_keyword_use(self):
-        self.assertIn("RECRUITER-READABLE NARRATIVE STRUCTURE", SYSTEM_PROMPT)
-        self.assertIn("3-part narrative arc", SYSTEM_PROMPT)
+        self.assertIn("GROUNDED KEYWORD ALIGNMENT", SYSTEM_PROMPT)
+        self.assertIn("source supports the meaning", SYSTEM_PROMPT)
 
     def test_rewrite_does_not_stack_aligned_language_keywords(self):
         rewritten = _rewrite_experience_bullet(
@@ -126,7 +126,7 @@ class CvTailorTests(unittest.TestCase):
         payload = _TailoredPayload(
             keywords=["Terraform"],
             summary="Cloud automation engineer focused on Terraform delivery.",
-            technical_expertise=["**Terraform**, Docker"],
+            technical_expertise=["**Terraform**, Docker", "Delivery engineering", "Leadership & Cross-Functional Collaboration"],
             experience_bullets=[["Built CI/CD pipelines."]],
         )
 
@@ -143,7 +143,7 @@ class CvTailorTests(unittest.TestCase):
         payload = _TailoredPayload(
             keywords=["Terraform"],
             summary="Cloud automation engineer focused on Terraform delivery.",
-            technical_expertise=["Terraform, Docker"],
+            technical_expertise=["Terraform, Docker", "Delivery engineering", "Leadership & Cross-Functional Collaboration"],
             experience_bullets=[["Built **Terraform** CI/CD automation."]],
         )
 
@@ -160,7 +160,7 @@ class CvTailorTests(unittest.TestCase):
         payload = _TailoredPayload(
             keywords=["Terraform", "Docker", "CI/CD"],
             summary="Cloud automation engineer focused on Terraform-backed CI/CD delivery.",
-            technical_expertise=["Docker, **Terraform**, **CI/CD**"],
+            technical_expertise=["Docker, **Terraform**, **CI/CD**", "Cloud architecture", "Leadership & Cross-Functional Collaboration"],
             experience_bullets=[
                 [
                     "Accelerated platform delivery through standardized release automation.",
@@ -207,7 +207,7 @@ class CvTailorTests(unittest.TestCase):
         payload = _TailoredPayload(
             keywords=["Terraform", "CI/CD"],
             summary="Cloud automation engineer focused on Terraform-backed CI/CD delivery.",
-            technical_expertise=["Azure, **AWS**", "Docker, **Terraform**"],
+            technical_expertise=["Azure, **AWS**", "Docker, **Terraform**", "Leadership & Cross-Functional Collaboration"],
             experience_bullets=[
                 ["Accelerated **CI/CD** delivery by building **Terraform**-aligned pipelines."]
             ],
@@ -246,7 +246,7 @@ class CvTailorTests(unittest.TestCase):
             {"name": "Technical Expertise", "content": "- Cloud: AWS, Azure, GCP, networking, monitoring, architecture"},
         ]
         payload = _TailoredPayload(summary="Results-driven engineer with specific model wording.",
-                                  technical_expertise=["**GCP**"])
+                                  technical_expertise=["**GCP**", "Delivery engineering", "Leadership & Cross-Functional Collaboration"])
         before = payload.model_dump()
         _validate_tailored_payload(payload, True, None, _split_technical_expertise(sections[1]['content']))
         self.assertEqual(payload.model_dump(), before)
@@ -255,7 +255,7 @@ class CvTailorTests(unittest.TestCase):
         self.assertIn("Cloud: **GCP**", rendered)
         self.assertNotIn("AWS", rendered)
 
-    def test_long_and_alternate_headers_send_metadata_and_counts_only(self):
+    def test_long_and_alternate_headers_include_verified_source_facts(self):
         headers = [
             "Senior Cloud Infrastructure Engineer | Very Long Employer Name Consulting and Technology Services | San Francisco Bay Area, California | January 2023 - September 2025",
             "Cloud Engineer at Example Consulting",
@@ -271,8 +271,8 @@ class CvTailorTests(unittest.TestCase):
                 self.assertEqual(entries[0]['bullets'], ['Delivered reliable services.', 'Automated deployments.'])
                 prompt, parsed, _ = _build_prompt([{'name':'Professional Experience','content':content}],
                                                   'Cloud Engineer', 'Target', 'Cloud infrastructure')
-                self.assertNotIn('Delivered reliable services.', prompt)
-                self.assertNotIn('Automated deployments.', prompt)
+                self.assertIn('Delivered reliable services.', prompt)
+                self.assertIn('Automated deployments.', prompt)
                 self.assertIn('"bullet_count_required": 2', prompt)
                 self.assertEqual(len(parsed[0]['bullets']), 2)
 
@@ -341,7 +341,7 @@ class CvTailorTests(unittest.TestCase):
 
 
 class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
-    async def test_full_jd_and_employer_counts_reach_api_without_base_experience(self):
+    async def test_full_jd_and_verified_experience_reach_api(self):
         jd = 'Affirm data platform requirements\n' + 'Streaming ingestion and schema governance.\n' * 300 + 'FINAL REQUIREMENT: data lineage'
         payload = self.payload()
         payload.experience_bullets = [[
@@ -359,15 +359,12 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
             result = await tailor_cv(self.master, 'Data Engineer', 'Affirm', jd)
         request = client.chat.completions.create.await_args.kwargs
         user = next(message['content'] for message in request['messages'] if message['role'] == 'user')
-        self.assertIn('Target Job Description:\n' + jd + '\n\nExperience Requirements (employer order):\n', user)
-        requirements = user.split('Experience Requirements (employer order):\n', 1)[1].split('\n\nMaster CV JSON:', 1)[0]
-        self.assertIn('Employer: Arqon Consulting\nRole Title: Cloud Engineer\nBullet Count Required: 2', requirements)
-        self.assertIn('Generate 2 brand-new, high-impact engineering workstream bullet points tailored 100% to the Target JD.', requirements)
-        self.assertIn('Do not echo standard DevOps boilerplate.', requirements)
+        data = json.loads(user)
+        self.assertEqual(data['job_description'], jd)
+        self.assertEqual(data['experience_requirements'][0]['bullet_count_required'], 4)
         for entry in _split_experience_entries(self.sections[2]['content']):
             for bullet in entry['bullets']:
-                self.assertNotIn(bullet, user)
-        self.assertNotIn('Candidate Base Bullets:', user)
+                self.assertIn(bullet, data['experience_requirements'][0]['verified_bullets'])
         self.assertEqual(request['temperature'], 0.7)
         self.assertEqual(result.template_data['experience_bullets'], payload.experience_bullets)
 
@@ -379,13 +376,13 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         client = AsyncMock()
         client.chat.completions.create.return_value = SimpleNamespace(choices=[
             SimpleNamespace(message=SimpleNamespace(content=json.dumps({
-                'technical_expertise': ['AWS, BigQuery', 'Airflow, Terraform']})))])
+                'technical_expertise': ['AWS, BigQuery', 'Airflow, Terraform', 'Leadership & Cross-Functional Collaboration']})))])
         with patch('app.services.cv_tailor.AsyncOpenAI') as factory:
             factory.return_value.__aenter__.return_value = client
             await _request_tailored_payload(SimpleNamespace(openai_api_key='test', openai_model='gpt-4o'), prompt)
         args = client.chat.completions.create.await_args.kwargs
         self.assertEqual(args['temperature'], 0.7)
-        self.assertIn('"label": "Cloud & Infrastructure", "items": "AWS, Azure GCP, VPC"', args['messages'][1]['content'])
+        self.assertEqual(json.loads(args["messages"][1]["content"])["verified_master_cv"], sections)
 
     def test_long_new_workstreams_survive_rendering_without_content_checks(self):
         entries = [{'header_line': 'Engineer | Example | 2023 - Present', 'tagline': None,
@@ -416,6 +413,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
 
     def payload(self):
         return _TailoredPayload(summary="Cloud engineer focused on reliable service operations.",
+                                technical_expertise=["Cloud architecture", "Delivery engineering", "Leadership & Cross-Functional Collaboration"],
                                 experience_bullets=[self.bullets.copy()])
 
     async def test_model_bullets_survive_without_stock_replacement(self):

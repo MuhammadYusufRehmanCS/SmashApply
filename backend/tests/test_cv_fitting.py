@@ -20,6 +20,7 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
         self.sections = [
             {'name': 'Header', 'content': 'MUHAMMAD YUSUF | SYSTEM ENGINEER\nBay Area, CA'},
             {'name': 'Executive Summary', 'content': 'Original summary.'},
+            {'name': 'Core Skills', 'content': '- Cloud: Service architecture\n- Delivery: Release engineering\n- Leadership & Cross-Functional Collaboration: Team coordination'},
             {'name': 'Professional Experience', 'content':
              'Cloud Engineer | Example | 2023 - Present\n'
              '- Designed and governed high-availability AWS architectures for production workloads.\n'
@@ -28,6 +29,7 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.master = MasterCV(sections_json=json.dumps(self.sections), raw_text='Master CV', layout_json='{}')
         self.payload = _TailoredPayload(summary='Engineer supporting reliable production services.',
+            technical_expertise=['Service architecture', 'Release engineering', 'Team coordination'],
             experience_bullets=[[
                 'Kept production services available by implementing resilient AWS systems and reviewing operational risks.',
                 'Made service recovery repeatable through reusable provisioning modules and Python operational scripts.',
@@ -128,9 +130,9 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(limits['summary']['lines'], 2)
 
     async def test_shortening_request_includes_category_label_with_tools(self):
-        self.sections.insert(2, {'name': 'Technical Expertise', 'content': '- Cloud & Infrastructure: AWS, Azure'})
+        self.sections[2] = {'name': 'Technical Expertise', 'content': '- Cloud & Infrastructure: AWS, Azure\n- Delivery: Release engineering\n- Leadership & Cross-Functional Collaboration: Team coordination'}
         self.master.sections_json = json.dumps(self.sections)
-        self.payload.technical_expertise = ['AWS, Azure, GCP, VPC, Data Platform']
+        self.payload.technical_expertise = ['AWS, Azure, GCP, VPC, Data Platform', 'Release engineering', 'Team coordination']
         candidate = _result_from_payload(self.sections, self.payload, cacheable=True)
         field = dict(path='technical_expertise.0', lines=3, characters=200, width=670,
                      prefix_width=120, average_char_width=5.5, line_height=16.32)

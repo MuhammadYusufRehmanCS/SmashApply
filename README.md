@@ -161,19 +161,67 @@ workflow; concurrent requests within the worker return a clear busy response.
 
 ## Known limitations
 
+### Finalized resume contract
+
+`app/services/tailor.py` uses `finalized_cv.html` for both email and job-list workflows when the master contains Arqon Consulting and Ventera Group. Upload the
+finalized Master CV containing Arqon Consulting and Ventera Group, the A.S. degree,
+a Certifications line, and Languages. The renderer preserves these source facts,
+removes education dates, restores the approved fixed header banner, and fixes work authorization
+to `United States Citizen (No sponsorship required)`.
+
+Generation requires a maximum 25-word, two-physical-line summary; exactly three
+Core Skills bullets (leadership/collaboration last); four Arqon and three Ventera
+bullets with the prescribed final project prefixes. The model is instructed not to
+repeat claims. Local checks reject exact/near-duplicate prose, repeated percentage
+metrics, and repeated technology names/aliases across editable text, including
+a shared technology/alias vocabulary. Arbitrary semantic paraphrases are not guaranteed
+to be detected by those local heuristics. Immutable certification names are preserved.
+No ATS-density repetition exception is currently enabled.
+
+Every PDF entrypoint uses the same `finalized_cv.html` shell (`cv_template.html`
+is only a compatibility include). It uses US Letter with half-inch margins,
+Calibri/Segoe UI/Arial, a uniform 12.48pt header and 9.96pt body/section headings.
+Header tags use bright blue `#0043ce`, section titles `#2f5496`, and employer
+headings `#1f3763`. Thin gray rules precede sections and the second employer.
+The two-line header keeps the supplied identity/contact details. Python limits
+the role suffix to four words and 32 characters; fonts never shrink. Content
+flows naturally without stretching sections to fill the page. Overflow is rejected.
+
+Core Skills, experience, education and additional information use consistent
+hanging bullets. Only the Selected Project label is bold, followed by the existing
+project wording. The renderer retains the existing structural validation. The LLM
+supplies JSON text only; all layout, colors, identity and HTML are application-owned.
+
+Both workflows share grounded generation and validation. Prompts prioritize exact
+JD terminology where supported by verified source achievements. New tool/framework
+claims and numeric values absent from the master are rejected; broader semantic
+factuality still needs human review. `core_skills` has `minItems = maxItems = 3`;
+`technical_expertise` is accepted for backward compatibility. Summary remains capped
+at 25 words/two physical lines, Core Skills rows at 28 words, general experience at
+30 words, and projects at 35. Invalid output receives at most two wording revisions.
+
+The inspected file was `smesh_cloudeng.pdf`; `smesh_cloudeng_5.pdf` was not available.
+The explicit current design rules take precedence over differences in that PDF
+(including its multiple blue shades, older font sizes, and bullet icons).
+
+Match score is unique JD-keyword coverage, recognizing aliases such as AWS/Amazon
+Web Services and K8s/Kubernetes. Repetition gives no extra credit. Unmet requirements
+remain in the denominator, so a higher score is not guaranteed and must not be
+achieved by inventing qualifications. Regenerate a job's resume to update its score.
+
 - **The fixed template targets the saved Master CV.** Its Letter page size, margins,
-  type sizes and blue headings are encoded in `backend/app/templates/cv_template.html`.
+  type sizes and blue headings are encoded in `backend/app/templates/finalized_cv.html`.
   The original source PDF is needed to verify an exact visual match. Other uploaded
   designs require a template change; detected layout metadata does not change CSS.
 - **Fonts:** Windows uses installed Calibri; Docker installs the metrically compatible
-  Carlito fallback. Exact glyph appearance requires the same licensed font on each host.
+  Carlito; the requested template stack falls back to Segoe UI/Arial when Calibri is absent. Exact glyph appearance requires the same fonts on each host.
 - **One-page enforcement:** Content is never shrunk or clipped. Overlong CV downloads
   return HTTP 422; shorten the source wording or tailor again. Existing cached text is
   adapted to the template without a database migration.
 - **Browser setup:** Local installations require `python -m playwright install chromium`;
   Linux hosts also need `python -m playwright install --with-deps chromium`. Docker
   installs Chromium and its dependencies during the build.
-- **Structured output:** The model supplies `summary`, `technical_expertise`, and
+- **Structured output:** The model supplies `summary`, `core_skills`, and
   `experience_bullets`; the application supplies immutable contact details, category
   labels, employer headings, education, and additional sections. Jinja2 escapes all
   text and allows only application-generated bold spans.

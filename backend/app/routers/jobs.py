@@ -110,6 +110,18 @@ def _get_master_cv_or_400(db: Session) -> MasterCV:
 
 def _has_cached_tailoring(job: Job, cv: MasterCV | None = None) -> bool:
     present = bool((job.tailored_cv or "").strip() and (job.tailored_keywords or "").strip())
+    if present and cv is not None:
+        from app.services.tailor import is_finalized_master, _validate
+        from app.services.cv_tailor import template_context_from_text, _TailoredPayload
+        from pydantic import ValidationError
+        if is_finalized_master(cv):
+            try:
+                context = template_context_from_text(job.tailored_cv)
+                _validate(_TailoredPayload(role_title=context["role_title"], summary=context["summary"],
+                                           core_skills=context["core_skills"],
+                                           experience_bullets=context["experience_bullets"]), cv.raw_text)
+            except (TailoringError, ValidationError, KeyError):
+                return False
     return present and (cv is None or has_reframed_experience(job.tailored_cv, json.loads(cv.sections_json)))
 
 
@@ -130,13 +142,20 @@ def _tailoring_failure_detail(exc: Exception) -> str:
         if status in (400, 403, 404):
             return "OpenAI rejected the configured model or request. Check model access and the backend error log."
         return "The OpenAI generation request failed or returned no usable response. Check the backend error log."
+    from app.services.cv_tailor import PayloadFormatError
+    from app.services.tailor import FinalizedValidationError
+    for item in reversed(chain):
+        if isinstance(item, (FinalizedValidationError, PayloadFormatError)):
+            return "Generated CV validation failed: " + str(item)
     if any(isinstance(item, CVOverflowError) for item in chain):
         return "Generated wording still exceeds one page after three shortening attempts."
     # These messages originate in our structural validator, never in model prose.
     for item in reversed(chain):
         message = str(item)
         if message.startswith(("Model returned ", "Model did not return ",
-                               "Could not parse Professional Experience", "Master CV has no parsed sections")):
+                               "Could not parse Professional Experience", "Master CV has no parsed sections",
+                               "Upload the finalized Master CV", "Master CV has no identity header",
+                               "Master CV has no Languages line", "Finalized CV did not pass")):
             return message
     return "Generated CV failed structure validation. Check the backend error log for the rejected field."
 

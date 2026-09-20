@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tailored Resume</title>
+<style>
+@page { size: 612.12pt 792.12pt; margin: 36pt;
+
+}
+* { box-sizing: border-box; }
+body { width: 540pt; margin: 0; color: #000;
+       font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+       font-size: 9.96pt; line-height: 12.24pt; }
+.cv-page { display: block; }
+header { margin-bottom: 29pt; }
+#header { margin: 0; font-size: 12.48pt !important; line-height: 15.3pt;
+          font-weight: bold; white-space: nowrap; letter-spacing: -0.08pt; }
+.name { color: #000; }
+.header-tag { color: #0043ce; }
+.contact { margin-top: 1pt; font-size: 9.96pt; line-height: 12.24pt; white-space: nowrap; }
+h2 { margin: 0 0 5.04pt; font-size: 9.96pt !important;
+     line-height: 12.24pt; font-weight: normal; color: #2f5496;
+     text-transform: uppercase; break-after: avoid; }
+section + section { margin-top: 13.2pt; position: relative; padding-top: 8.28pt; }
+section:nth-of-type(3), section:nth-of-type(5) { margin-top: 18.24pt; }
+section + section::before, .entry + .entry::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: .75pt; background: #a0a0a0; transform: scaleY(.64); transform-origin: top; }
+p { margin: 0; overflow-wrap: break-word; }
+.entry + .entry { margin-top: 18.24pt; position: relative; padding-top: 8.28pt; }
+.entry-heading { color: #1f3763; margin-bottom: 5.04pt; break-after: avoid; }
+.company { font-weight: bold; }
+ul { list-style: none; margin: 0; padding-left: 36pt; }
+li { position: relative; margin: 0 0 5.4pt; break-inside: avoid; overflow-wrap: break-word; }
+li::before { content: "\2022"; position: absolute; left: -18pt; font-family: Arial, sans-serif; line-height: 0; top: 6pt; }
+li:last-child { margin-bottom: 0; }
+.entry li { margin-bottom: 2.4pt; }
+.entry:first-of-type li:nth-child(-n+2) { line-height: 14.4pt; margin-bottom: 9.2pt; }
+footer { position: fixed; bottom: 0; width: 540pt; text-align: center; font: 9.96pt/12.24pt Cambria, Georgia, serif; color: #0043ce; }
+</style>
+</head>
+<body data-finalized-cv>
+<main class="cv-page">
+<header>
+<div id="header"><span class="name">MUHAMMAD YUSUF</span><span class="header-tag"> | <span data-header-role>{{ role_title | upper }}</span> | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION</span></div>
+<p class="contact">A.S Computer Science &amp; Engineering | Bay Area, CA | rmyusufrehman@gmail.com | +1 (424) 305-8206 | <strong>Citizenship:</strong> United States</p>
+</header>
+<section><h2>Executive Summary</h2><p data-summary>{{ summary | inline }}</p></section>
+<section><h2>Core Skills</h2>
+<ul>{% for skill in core_skills %}<li class="skills-row" data-field="technical_expertise.{{ loop.index0 }}">{{ skill | labeled_row }}</li>{% endfor %}</ul>
+</section>
+<section><h2>Professional Experience</h2>
+{% for entry in experience %}<div class="entry">
+<p class="entry-heading">{{ entry.header_line | company_heading }}</p>
+<ul>{% for bullet in entry.standard_bullets %}<li data-field="experience_bullets.{{ entry.index }}.{{ loop.index0 }}">{{ bullet | inline }}</li>{% endfor %}
+{% if entry.project %}<li class="selected-project" data-field="experience_bullets.{{ entry.index }}.{{ entry.standard_bullets | length }}">{{ entry.project | project_row }}</li>{% endif %}</ul>
+</div>{% endfor %}
+</section>
+<section><h2>Education &amp; Certifications</h2>
+<ul>{% for line in education %}<li class="plain-row">{{ line | education_row }}</li>{% endfor %}</ul>
+</section>
+<section><h2>Additional Information</h2><ul>
+<li class="plain-row">{{ languages | labeled_row }}</li>
+<li class="plain-row"><strong>Work Authorization:</strong> United States Citizen (No sponsorship required)</li></ul>
+</section>
+</main>
+<footer>1/1</footer>
+</body>
+</html>
