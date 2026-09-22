@@ -68,12 +68,12 @@ class CvTailorTests(unittest.TestCase):
 
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
         self.assertIn("Every bullet MUST", SYSTEM_PROMPT)
-        self.assertIn("Never invent metrics, dates, employers", SYSTEM_PROMPT)
+        self.assertIn("source-number membership is not a restriction", SYSTEM_PROMPT)
         self.assertIn("Arqon Consulting = EXACTLY 4 bullets", SYSTEM_PROMPT)
 
     def test_system_prompt_requires_readable_keyword_use(self):
-        self.assertIn("GROUNDED KEYWORD ALIGNMENT", SYSTEM_PROMPT)
-        self.assertIn("source supports the meaning", SYSTEM_PROMPT)
+        self.assertIn("ACTIVE SCOPE EXPANSION", SYSTEM_PROMPT)
+        self.assertIn("recruiter-readable sentences", SYSTEM_PROMPT)
 
     def test_rewrite_does_not_stack_aligned_language_keywords(self):
         rewritten = _rewrite_experience_bullet(

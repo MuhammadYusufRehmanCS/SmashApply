@@ -86,6 +86,7 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('exceeds one page', _tailoring_failure_detail(CVOverflowError('too long')))
         provider = RuntimeError('private')
         provider.status_code = 429
+        provider.code = 'insufficient_quota'
         failure = LLMExecutionError('request failed')
         failure.__cause__ = provider
         self.assertIn('quota', _tailoring_failure_detail(failure))
@@ -165,6 +166,28 @@ class FitTests(unittest.IsolatedAsyncioTestCase):
                 await _run_tailor(self.job, self.master, db, candidate=self.result)
         db.commit.assert_not_called()
         self.assertIsNone(self.job.tailored_cv)
+
+    async def test_tailor_route_discloses_saved_resume_fallback(self):
+        from app.routers.jobs import tailor_job
+        fallback = self.result._replace(cacheable=False, used_fallback=True)
+        db = Mock()
+        db.get.return_value = self.job
+        with patch('app.routers.jobs._get_master_cv_or_400', return_value=self.master), \
+             patch('app.routers.jobs._run_tailor', new=AsyncMock(return_value=fallback)):
+            response = await tailor_job(self.job.id, db)
+        self.assertTrue(response.used_fallback)
+        self.assertIn('no new resume was generated', response.warning)
+
+    async def test_saved_resume_warning_includes_actual_failure(self):
+        from app.services.tailor import FinalizedValidationError
+        db = Mock()
+        with patch('app.routers.jobs.fit_tailored_cv', new=AsyncMock(
+                side_effect=FinalizedValidationError('Repeated technology exceeds the JD keyword budget: AWS'))):
+            result = await _run_tailor(self.job, self.master, db, candidate=self.result)
+        self.assertTrue(result.used_fallback)
+        self.assertIn('AWS', result.warning)
+        self.assertIn('Error reference:', result.warning)
+        db.commit.assert_not_called()
 
     async def test_failed_refresh_returns_previous_valid_resume(self):
         db = Mock()

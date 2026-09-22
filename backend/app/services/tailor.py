@@ -12,11 +12,13 @@ from difflib import SequenceMatcher
 from app.config import get_settings
 from app.models import MasterCV
 from app.services.cv_tailor import (
-    LLMExecutionError, TailoringError, _request_tailored_payload,
+    LLMExecutionError, PayloadFormatError, TailoringError, _request_tailored_payload,
     _split_experience_entries, SYSTEM_PROMPT, TailorCVResult, short_role_title,
 )
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
 from app.services.text_sections import strip_bullet
+from app.services.cv_repair import request_field_repairs
+from app.services.openai_retry import rate_limit_retry_budget
 
 PROJECTS = (
     "Selected Project: Release Automation System -",
@@ -93,11 +95,52 @@ def _source_context(master):
 
 
 def _mentions(text, aliases):
+    if not aliases:
+        return []
     return list(re.finditer(r"(?<![\w])(?:" + "|".join(re.escape(a) for a in sorted(aliases, key=len, reverse=True)) + r")(?![\w])", text, re.I))
 
 
 class FinalizedValidationError(TailoringError):
     """A locally generated, safe-to-display validation reason."""
+
+
+class FieldValidationError(FinalizedValidationError):
+    def __init__(self, message, paths):
+        self.paths = paths
+        super().__init__(message)
+
+
+class DuplicateTechnologyError(FinalizedValidationError):
+    """Strict duplicate rejection with exact field locations for model repair."""
+
+    def __init__(self, repairs):
+        self.repairs = repairs
+        super().__init__("Repeated technology; maximum 1 mention across editable fields: " +
+                         "; ".join(r["technology"] + " (" + ", ".join(r["occurrences"]) + ")" for r in repairs))
+
+
+def _duplicate_repairs(payload):
+    fields = [("role_title", payload.role_title), ("summary", payload.summary)]
+    fields += [(f"core_skills.{i}", text) for i, text in enumerate(payload.core_skills)]
+    fields += [(f"experience_bullets.{i}.{j}", text)
+               for i, group in enumerate(payload.experience_bullets) for j, text in enumerate(group)]
+    repairs = []
+    for name, aliases in TECHNOLOGIES.items():
+        found = [(path, text, len(_mentions(text, aliases))) for path, text in fields
+                 if _mentions(text, aliases)]
+        if sum(count for _, _, count in found) <= 1:
+            continue
+        # Retain the concrete project evidence before general descriptions.
+        keep = min(found, key=lambda item: (
+            0 if item[1].startswith("Selected Project:") else
+            1 if item[0].startswith("experience_bullets.") else
+            2 if item[0].startswith("core_skills.") else
+            3 if item[0] == "summary" else 4,
+        ))[0]
+        repairs.append({"technology": name, "keep_in": keep, "maximum_mentions": 1,
+                        "occurrences": {path: count for path, _, count in found},
+                        "rewrite_without_name_or_alias": [path for path, _, _ in found if path != keep]})
+    return repairs
 
 
 def _normalized_payload(payload):
@@ -126,7 +169,7 @@ def _normalized_payload(payload):
     })
 
 
-def _validate(payload, master_text: str | None = None):
+def _validate(payload, master_text: str | None = None, job_description: str = ""):
     payload = _normalized_payload(payload)
     if not payload.role_title.strip() or len(payload.role_title.split()) > 4 or len(payload.role_title) > 32 or "\n" in payload.role_title:
         raise FinalizedValidationError("Role title must be 1-4 words and at most 32 characters on one line.")
@@ -139,20 +182,23 @@ def _validate(payload, master_text: str | None = None):
         raise FinalizedValidationError("Core Skills bullet 3 must cover Leadership & Cross-Functional Collaboration.")
     if skills[0].split(":", 1)[0].casefold() == skills[1].split(":", 1)[0].casefold():
         raise FinalizedValidationError("Core Skills domain labels must be distinct.")
-    if any(len(_clean(skill).split()) > 28 for skill in skills):
-        raise FinalizedValidationError("Core Skills bullets must be at most 28 words each.")
+    if any(len(_clean(skill).split()) > 30 for skill in skills):
+        raise FinalizedValidationError("Core Skills bullets must be at most 30 words each.")
     groups = payload.experience_bullets
     if len(groups) != 2 or [len(g) for g in groups] != [4, 3]:
         raise FinalizedValidationError("Experience must have exactly four Arqon and three Ventera bullets.")
-    for group, prefix in zip(groups, PROJECTS):
+    for employer, (group, prefix) in enumerate(zip(groups, PROJECTS)):
         if not group[-1].startswith(prefix) or not group[-1][len(prefix):].strip():
-            raise FinalizedValidationError("Selected Project prefix or project description is missing: " + prefix)
-        if any("selected project:" in bullet.lower() for bullet in group[:-1]):
-            raise FinalizedValidationError("Selected Projects must occur only in the final employer bullet.")
+            raise FieldValidationError("Selected Project prefix or project description is missing: " + prefix,
+                                       [f'experience_bullets.{employer}.{len(group) - 1}'])
+        misplaced = [f'experience_bullets.{employer}.{index}' for index, bullet in enumerate(group[:-1])
+                     if 'selected project:' in bullet.lower()]
+        if misplaced:
+            raise FieldValidationError("Selected Projects must occur only in the final employer bullet. Rewrite these as standard achievements without a project label.", misplaced)
     for group in groups:
         for index, bullet in enumerate(group):
-            if len(_clean(bullet).split()) > (35 if index == len(group) - 1 else 30):
-                raise FinalizedValidationError("Experience word budget exceeded: general bullets 30 words, projects 35.")
+            if len(_clean(bullet).split()) > 35:
+                raise FinalizedValidationError("Experience word budget exceeded: all bullets at most 35 words.")
     prose = [payload.summary, *skills, *groups[0], *groups[1]]
     if any(not text.strip() or "\n" in text for text in prose):
         raise FinalizedValidationError("Every bullet must be nonempty, single-paragraph text.")
@@ -162,35 +208,17 @@ def _validate(payload, master_text: str | None = None):
         for other in claims[:index]:
             if SequenceMatcher(None, claim, other).ratio() >= 0.82:
                 raise FinalizedValidationError("Duplicate or near-duplicate claim across resume sections.")
-    vocabulary = dict(TECHNOLOGIES)
-    repeated = [name for name, aliases in vocabulary.items()
-                if sum(len(_mentions(text, aliases)) for text in [payload.role_title, *prose]) > 1]
-    if repeated:
-        raise FinalizedValidationError(
-            "Repeated technology; keep each in its Selected Project when applicable: " + ", ".join(repeated))
-    if master_text is not None:
-        generated = " ".join(prose)
-        source = _clean(master_text)
-        for name, aliases in vocabulary.items():
-            if _mentions(generated, aliases) and not _mentions(source, aliases):
-                raise FinalizedValidationError("Technology claim is not supported by the Master CV: " + name)
-        # Deterministically block newly invented quantitative claims. Semantic
-        # equivalence still relies on the grounded prompt, not an ATS score.
-        numbers = r"(?<![\w])\d+(?:\.\d+)?"
-        if set(re.findall(numbers, generated)) - set(re.findall(numbers, source)):
-            raise FinalizedValidationError("Generated metrics contain numbers absent from the Master CV.")
-        standards = r"\b(?:SOC\s*2|ISO[ -]*27001|NIST(?:[ -]+(?:\d+-\d+|CSF|RMF))?|HIPAA|PCI[ -]*DSS|FedRAMP)\b"
-        for match in re.finditer(standards, generated, re.I):
-            if not _mentions(source, (match[0],)):
-                raise FinalizedValidationError("Compliance/framework claim is not supported by the Master CV: " + match[0])
+    repairs = _duplicate_repairs(payload)
+    if repairs:
+        raise DuplicateTechnologyError(repairs)
     metrics = re.findall(r"\b\d+(?:\.\d+)?\s*%", " ".join(prose))
     if len(metrics) != len(set(metrics)):
         raise FinalizedValidationError("Repeated quantified accomplishment across sections.")
 
 
-def _context(source, payload, master_text=None):
+def _context(source, payload, master_text=None, job_description=""):
     payload = _normalized_payload(payload).model_copy(update={"role_title": short_role_title(payload.role_title)})
-    _validate(payload, master_text)
+    _validate(payload, master_text, job_description)
     return dict(source, role_title=_clean(payload.role_title), summary=_clean(payload.summary),
                 core_skills=[re.sub(r"\s+", " ", s).strip() for s in payload.core_skills],
                 experience=[dict(entry, bullets=[re.sub(r"\s+", " ", b).strip() for b in bullets])
@@ -215,33 +243,237 @@ def _serialize(context):
     return "\n\n".join(blocks)
 
 
+def _validate_active_rewrite(payload, master):
+    """Reject copied experience locally instead of trusting a prompt alone."""
+    sections = json.loads(master.sections_json)
+    text = next((s["content"] for s in sections if "experience" in s["name"].lower()), "")
+    entries = _split_experience_entries(text)
+    def claim(value):
+        value = _clean(value).lower()
+        if value.startswith("selected project:"):
+            value = value.partition(" - ")[2]
+        return re.sub(r"[^a-z0-9]+", " ", value).strip()
+    copied = []
+    copied_paths = []
+    for employer, (entry, bullets) in enumerate(zip(entries, payload.experience_bullets), 1):
+        originals = [claim(b) for b in entry["bullets"]]
+        for index, bullet in enumerate(bullets, 1):
+            candidate = claim(bullet)
+            if candidate and any(SequenceMatcher(None, candidate, original).ratio() >= .96 for original in originals):
+                copied.append(f"employer {employer} bullet {index}")
+                copied_paths.append(f"experience_bullets.{employer - 1}.{index - 1}")
+    if copied:
+        raise FieldValidationError("Experience wording is unchanged or minimally edited: " +
+                                       "; ".join(copied) + ". Rewrite the technical action and scope for the JD using role-aligned scope.", copied_paths)
+    underfilled = []
+    underfilled_paths = []
+    if len(_clean(payload.summary).split()) < 20:
+        underfilled.append("summary: target 20-25 words")
+        underfilled_paths.append("summary")
+    for index, skill in enumerate(payload.core_skills, 1):
+        if len(_clean(skill).split()) < 25:
+            underfilled.append(f"Core Skills {index}: target 25-30 words")
+            underfilled_paths.append(f"core_skills.{index - 1}")
+    for employer, bullets in enumerate(payload.experience_bullets, 1):
+        for index, bullet in enumerate(bullets, 1):
+            if len(_clean(bullet).split()) < 28:
+                underfilled.append(f"employer {employer} bullet {index}: target 28-35 words")
+                underfilled_paths.append(f"experience_bullets.{employer - 1}.{index - 1}")
+    if underfilled:
+        raise FieldValidationError("Insufficient technical detail: " + "; ".join(underfilled) +
+                                       ". Expand with concrete role-aligned action, implementation and quantified impact.", underfilled_paths)
+
+
+def _editable_fields(payload):
+    return {"role_title": payload.role_title, "summary": payload.summary,
+            **{f"core_skills.{i}": text for i, text in enumerate(payload.core_skills)},
+            **{f"experience_bullets.{i}.{j}": text for i, group in enumerate(payload.experience_bullets)
+               for j, text in enumerate(group)}}
+
+
+def _repair_plan(payload, error, previous=None):
+    fields = _editable_fields(payload)
+    paths = set(getattr(error, "paths", []))
+    caps = {}
+    line_targets = {}
+    if isinstance(error, DuplicateTechnologyError):
+        for repair in error.repairs:
+            paths.update(repair["rewrite_without_name_or_alias"])
+            if repair["occurrences"][repair["keep_in"]] > 1:
+                paths.add(repair["keep_in"])
+    elif isinstance(error, CVOverflowError):
+        if error.measurements:
+            measured = error.measurements
+            logging.getLogger(__name__).warning(
+                'PDF fit: %.1fpx used / %.1fpx available; field lines=%s',
+                measured['content_height'], measured['available_height'],
+                {f['path']: f['lines'] for f in measured['fields']})
+            remaining = max(measured['content_height'] - measured['available_height'],
+                            min((f['line_height'] for f in measured['fields']), default=0))
+            # Reclaim only the measured excess. Experience may occupy three lines;
+            # do not squeeze every field to two lines after any page overflow.
+            ordered = sorted(measured['fields'], key=lambda f: (
+                -max(0, f['lines'] - (3 if f['path'].startswith('experience') else 2)),
+                -f['lines'], -f['line_height']))
+            for field in ordered:
+                path = field["path"].replace("technical_expertise.", "core_skills.")
+                minimum = 2
+                target_lines = field['lines']
+                while remaining > 0 and target_lines > minimum:
+                    target_lines -= 1
+                    remaining -= field['line_height']
+                if target_lines < field['lines']:
+                    paths.add(path)
+                    line_targets[path] = dict(rendered_lines=field['lines'], target_lines=target_lines)
+                    # A width-based estimate guides rewriting; actual glyph widths
+                    # and PDF pagination, not string length, decide whether it fits.
+                    prefix = fields.get(path, "").partition(":")[0] + ": " if path.startswith("core_skills.") else ""
+                    caps[path] = int(.9 * (field["width"] * target_lines - field["prefix_width"]) /
+                                     max(field["average_char_width"], 1)) + len(prefix)
+                    prior = (previous or {}).get(path, {})
+                    if prior.get('target_lines') == target_lines and prior.get('target_characters'):
+                        # The previous estimate did not produce fewer physical lines.
+                        # Tighten the guidance instead of asking for the same failed fit.
+                        caps[path] = min(caps[path], int(prior['target_characters'] * .9))
+        if not paths:
+            paths = set(fields) - {"role_title"}
+    elif "Executive Summary" in str(error):
+        paths.add("summary")
+    elif "word budget" in str(error) or "Core Skills bullets" in str(error):
+        paths.update(path for path, text in fields.items()
+                     if len(_clean(text).split()) > (30 if path.startswith("core_skills.") else 35))
+    # Assign each technology to its existing field, with concrete projects taking priority.
+    owners = {r["technology"]: r["keep_in"] for r in _duplicate_repairs(payload)}
+    for name, aliases in TECHNOLOGIES.items():
+        owners.setdefault(name, next((path for path, text in fields.items() if _mentions(text, aliases)), None))
+    plan = {}
+    for path in sorted(paths):
+        if path not in fields:
+            continue
+        text = fields[path]
+        low, high = ((1, 4) if path == "role_title" else (20, 25) if path == "summary"
+                     else (25, 30) if path.startswith("core_skills.") else (28, 35))
+        project_paths = {'experience_bullets.0.3': PROJECTS[0], 'experience_bullets.1.2': PROJECTS[1]}
+        prefix = text.partition(":")[0] + ":" if path.startswith("core_skills.") else project_paths.get(path, '')
+        spec = dict(text=text, min_words=low, max_words=high, required_prefix=prefix,
+                    forbidden_terms=[alias for name, aliases in TECHNOLOGIES.items()
+                                     if owners[name] is not None and owners[name] != path for alias in aliases])
+        previous_spec = (previous or {}).get(path, {})
+        if "last_rejection" in previous_spec:
+            spec["last_rejection"] = previous_spec["last_rejection"]
+        old_cap = previous_spec.get("target_characters")
+        cap = caps.get(path, old_cap)
+        if cap is not None:
+            spec["target_characters"] = cap
+        if path in line_targets:
+            spec.update(line_targets[path])
+            # Choose the shortest permitted word count for an overflowing field.
+            # This is enforced in the generation schema, not left to prose advice.
+            spec['generation_word_count'] = spec['min_words']
+        elif previous_spec.get('target_lines'):
+            for key in ('rendered_lines', 'target_lines'):
+                spec[key] = previous_spec[key]
+            spec['generation_word_count'] = spec['min_words']
+        plan[path] = spec
+    return plan
+
+
+def _apply_field_repairs(payload, replacements, plan):
+    data = payload.model_dump()
+    errors = []
+    for path, spec in plan.items():
+        value = replacements.get(path)
+        reasons = []
+        if not isinstance(value, str):
+            reasons.append("Return a nonempty text string.")
+        else:
+            words = len(_clean(value).split())
+            characters = len(value.replace("**", ""))
+            if "\n" in value:
+                reasons.append("Remove newlines; keep one paragraph.")
+            if not spec["min_words"] <= words <= spec["max_words"]:
+                reasons.append(f"Returned {words} words; required {spec['min_words']}-{spec['max_words']} words.")
+            if spec["required_prefix"] and not value.startswith(spec["required_prefix"]):
+                reasons.append("Preserve the required_prefix exactly.")
+            if "max_characters" in spec and characters > spec["max_characters"]:
+                reasons.append(f"Returned {characters} characters; maximum {spec['max_characters']}.")
+            forbidden = sorted({match[0] for match in _mentions(value, spec["forbidden_terms"])})
+            if forbidden:
+                reasons.append("Remove forbidden technology names/aliases: " + ", ".join(forbidden))
+            repeated = [name for name, aliases in TECHNOLOGIES.items() if len(_mentions(value, aliases)) > 1]
+            if repeated:
+                reasons.append("Use each technology only once: " + ", ".join(repeated))
+        if reasons:
+            if spec.get("last_rejection", {}).get("text") == value:
+                reasons.append("This is identical to the previous rejected replacement; produce a different correction.")
+            spec["last_rejection"] = {"text": value if isinstance(value, str) else None, "reasons": reasons}
+            errors.append(path)
+            continue
+        spec.pop("last_rejection", None)
+        target = data
+        parts = path.split(".")
+        for part in parts[:-1]:
+            target = target[int(part)] if isinstance(target, list) else target[part]
+        target[int(parts[-1]) if isinstance(target, list) else parts[-1]] = value.strip()
+    return type(payload).model_validate(data), errors
+
+
 async def generate_tailored_result(raw_email: str, master: MasterCV, job_title: str = "Email referral"):
-    """Shared generation path for email and job-list tailoring."""
+    settings = get_settings()
+    try:
+        with rate_limit_retry_budget(3):
+            async with asyncio.timeout(settings.tailoring_timeout_seconds):
+                return await _generate_with_repairs(raw_email, master, job_title, settings)
+    except TimeoutError as exc:
+        raise FinalizedValidationError(
+            f"Tailoring stopped after {settings.tailoring_timeout_seconds} seconds. No invalid resume was accepted.") from exc
+
+
+async def _generate_with_repairs(raw_email, master, job_title, settings):
     source = _source_context(master)
-    prompt = json.dumps({"target_role": job_title, "job_description": raw_email,
-                         "verified_master_cv": master.raw_text}, ensure_ascii=False)
-    base_prompt = prompt
-    last_error = None
-    for attempt in range(3):
-        payload = None
+    from app.services.cv_tailor import jd_keywords
+    target_terms = jd_keywords(raw_email)
+    request_context = {"target_role": job_title, "job_description": raw_email,
+                       "master_cv_baseline": master.raw_text,
+                       "target_keywords": target_terms,
+                       "writing_goal": "Expand project scope, technical workstreams, tooling and metrics to align directly with the target role. Use senior ownership verbs and clear action, implementation and quantified impact. Keep employer headers and credentials unchanged; avoid keyword stuffing."}
+    base_prompt = json.dumps(request_context, ensure_ascii=False)
+    payload, last_error, plan = None, None, {}
+    feedback = []
+    for attempt in range(settings.tailoring_max_attempts):
         try:
-            payload = await _request_tailored_payload(get_settings(), prompt, system_prompt=RULEBOOK)
-            context = _context(source, payload, master.raw_text)
+            if payload is not None and plan:
+                replacements = await request_field_repairs(
+                    settings, plan, dict(request_context, current_candidate=payload.model_dump()), feedback[-4:])
+                payload, rejected = _apply_field_repairs(payload, replacements, plan)
+                if rejected:
+                    reasons = {path: plan[path]["last_rejection"]["reasons"] for path in rejected}
+                    raise FieldValidationError("Field repairs rejected: " + json.dumps(reasons), rejected)
+            else:
+                prompt = base_prompt
+                if last_error is not None:
+                    prompt += "\nCorrect all recorded validation failures: " + json.dumps(feedback[-4:])
+                if payload is not None:
+                    prompt += "\nPrevious candidate: " + payload.model_dump_json()
+                payload = await _request_tailored_payload(settings, prompt, system_prompt=RULEBOOK)
+            context = _context(source, payload, master.raw_text, raw_email)
+            _validate_active_rewrite(payload, master)
             pdf = await asyncio.to_thread(build_ats_pdf, context)
             from app.services.cv_tailor import jd_keywords
-            keywords = jd_keywords(raw_email, payload.keywords)
-            return TailorCVResult(keywords, _serialize(context), True, False), pdf
+            return TailorCVResult(jd_keywords(raw_email, payload.keywords), _serialize(context), True, False), pdf
         except LLMExecutionError:
             raise
         except (TailoringError, CVOverflowError) as exc:
             last_error = exc
-            logging.getLogger(__name__).warning("Finalized CV attempt %s/3 rejected (%s): %s", attempt + 1, type(exc).__name__, exc)
-            if attempt < 2:
-                prompt = base_prompt + "\nCorrect the previous validation failure: " + str(exc)
-                if payload is not None:
-                    prompt += "\nPrevious candidate: " + payload.model_dump_json()
-                prompt += "\nReturn complete corrected JSON. Shorten wording as needed; retain every required bullet and all facts."
-    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+            feedback.append(str(exc))
+            logging.getLogger(__name__).warning("Finalized CV attempt %s/%s rejected (%s): %s",
+                                               attempt + 1, settings.tailoring_max_attempts, type(exc).__name__, exc)
+            if payload is not None:
+                # Malformed patch responses retry the same fields without losing valid text.
+                if not isinstance(exc, PayloadFormatError):
+                    plan = _repair_plan(payload, exc, plan)
+    raise TailoringError(f"Finalized CV did not pass validation after {settings.tailoring_max_attempts} attempts. "
+                        "No invalid resume was accepted.") from last_error
 
 
 async def generate_tailored_resume(raw_email: str, master: MasterCV, job_title: str = "Email referral") -> bytes:

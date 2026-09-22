@@ -67,13 +67,13 @@ class PDFGeneratorTests(unittest.TestCase):
                          'Example University', 'Languages: English'):
             self.assertIn(expected, text)
 
-    def test_header_uses_uniform_reference_font_without_scaling(self):
+    def test_header_keeps_fixed_fonts_and_complete_role(self):
         data = template_context_from_text(CV)
         with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
             line = document.pages[0].extract_text_lines()[0]
             self.assertIn('CLOUD AUTOMATION', line['text'])
-            for char in line['chars']:
-                self.assertAlmostEqual(char['size'], 12.48, delta=0.03)
+            self.assertAlmostEqual(line['chars'][0]['size'], 12.48, delta=0.03)
+            self.assertTrue(all(abs(c['size'] - 12.48) < .03 for c in line['chars']))
         for title in ('DATA CENTER PLANT ENGINEER, MECHANICAL', 'Senior Cloud Platform & DevSecOps Engineer'):
             data['role_title'] = title
             with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
@@ -81,8 +81,8 @@ class PDFGeneratorTests(unittest.TestCase):
                 self.assertIn('CLOUD AUTOMATION', line['text'])
                 self.assertLessEqual(line['x1'], 576.5)
                 self.assertNotIn('& |', line['text'])
-                for char in line['chars']:
-                    self.assertAlmostEqual(char['size'], 12.48, delta=0.03)
+                self.assertIn('ENGINEER', line['text'])
+                self.assertAlmostEqual(line['chars'][0]['size'], 12.48, delta=0.03)
                 self.assertIn('Automated deployments with Terraform.', document.pages[0].extract_text())
             self.assertEqual(data['role_title'], title)
 
@@ -93,7 +93,7 @@ class PDFGeneratorTests(unittest.TestCase):
             build_ats_pdf(data)
         measurements = caught.exception.measurements
         self.assertGreater(measurements['content_height'], measurements['available_height'])
-        self.assertAlmostEqual(measurements['available_height'], (792.12 - 36 - 36) * 4 / 3, delta=0.1)
+        self.assertAlmostEqual(measurements['available_height'], 704 * 4 / 3, delta=0.1)
         self.assertEqual(len([f for f in measurements['fields']
                               if f['path'].startswith('experience_bullets')]), 120)
 

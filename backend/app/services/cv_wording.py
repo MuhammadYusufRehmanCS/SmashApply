@@ -3,6 +3,7 @@ import json
 import logging
 
 from openai import APIError, AsyncOpenAI
+from app.services.openai_retry import request_with_backoff
 
 from app.services.cv_tailor import LLMExecutionError, TailoringError, TAILORING_TEMPERATURE
 
@@ -32,7 +33,7 @@ async def request_wording_replacements(settings, fields: dict, title: str) -> di
                 '(exclude paired ** emphasis markers). Aim 15% below each limit. '
                 'Keep each bullet a complete accomplishment: action, implementation, outcome. '
                 'Keep its target-domain meaning; do not invent new facts, metrics, tools, frameworks or initiatives. '
-                'Use direct verbs and short clauses. Summary: at most 25 words and two physical lines. Skills: a short '
+                'Use direct verbs and short clauses. Summary: 35-40 words and up to three physical lines. Skills: a short '
                 'comma-separated tool list, WITHOUT a category label. Preserve useful bold emphasis. '
                 'Do not output headings, explanations, or extra fields. Never cut off a sentence.')},
             {'role': 'user', 'content': json.dumps({
@@ -42,7 +43,7 @@ async def request_wording_replacements(settings, fields: dict, title: str) -> di
         ]
         try:
             async with AsyncOpenAI(api_key=settings.openai_api_key, timeout=180, max_retries=0) as client:
-                completion = await client.chat.completions.create(
+                completion = await request_with_backoff(client.chat.completions.create,
                     model=settings.openai_model, messages=messages,
                     response_format={'type': 'json_schema', 'json_schema': {
                         'name': 'cv_wording_replacements', 'strict': True, 'schema': schema}},

@@ -40,6 +40,8 @@ class ScrapeResult(BaseModel):
 
 
 class TailorResult(BaseModel):
+    used_fallback: bool = False
+    warning: str | None = None
     job_id: int
     keywords: list[str]
     tailored_cv: str

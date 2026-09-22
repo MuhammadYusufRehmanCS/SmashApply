@@ -1,0 +1,139 @@
+INFO:     127.0.0.1:60516 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50060 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56455 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54367 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51263 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50060 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54367 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56455 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56253 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56253 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 22:47:40,980 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:41,036 WARNING app.services.tailor: Finalized CV attempt 1/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (summary, core_skills.0, experience_bullets.1.2)
+2026-09-20 22:47:42,452 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:42,459 WARNING app.services.tailor: Finalized CV attempt 2/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:43,647 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:43,654 WARNING app.services.tailor: Finalized CV attempt 3/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:44,834 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:44,834 WARNING app.services.tailor: Finalized CV attempt 4/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:46,043 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:46,050 WARNING app.services.tailor: Finalized CV attempt 5/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:47,142 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:47,147 WARNING app.services.tailor: Finalized CV attempt 6/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:48,421 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:48,429 WARNING app.services.tailor: Finalized CV attempt 7/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:49,929 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:49,932 WARNING app.services.tailor: Finalized CV attempt 8/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:51,221 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:51,225 WARNING app.services.tailor: Finalized CV attempt 9/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:53,058 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:53,058 WARNING app.services.tailor: Finalized CV attempt 10/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:54,148 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:47:54,155 WARNING app.services.tailor: Finalized CV attempt 11/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-20 22:47:54,995 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-09-20 22:47:54,995 ERROR root: Tailoring failed for job 1259 [error fc8a4a4e2eb1]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_repair.py", line 20, in request_field_repairs
+    result = await client.chat.completions.create(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1764, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-ueTSHuG4SGVkF5OSUsDM0mui on tokens per min (TPM): Limit 30000, Used 28071, Requested 3927. Please try again in 3.996s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2952, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 382, in generate_tailored_result
+    return await _generate_with_repairs(raw_email, master, job_title, settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 398, in _generate_with_repairs
+    replacements = await request_field_repairs(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_repair.py", line 42, in request_field_repairs
+    raise LLMExecutionError("OpenAI field-repair request failed.") from exc
+app.services.cv_tailor.LLMExecutionError: OpenAI field-repair request failed.
+2026-09-20 22:47:56,203 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:56253 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56057 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56057 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61781 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51424 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61781 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-21 01:37:21,222 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:21,253 WARNING app.services.tailor: Finalized CV attempt 1/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 01:37:25,214 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:25,218 WARNING app.services.tailor: Finalized CV attempt 2/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 01:37:28,203 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:28,203 WARNING app.services.tailor: Finalized CV attempt 3/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 01:37:31,690 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:31,716 WARNING app.services.tailor: Finalized CV attempt 4/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 01:37:34,643 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:34,711 WARNING app.services.tailor: Finalized CV attempt 5/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0, experience_bullets.0.0); Terraform (summary, core_skills.0, experience_bullets.1.2)
+2026-09-21 01:37:36,183 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:36,207 WARNING app.services.tailor: Finalized CV attempt 6/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:38,017 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:38,038 WARNING app.services.tailor: Finalized CV attempt 7/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:39,331 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:39,351 WARNING app.services.tailor: Finalized CV attempt 8/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:43,076 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:43,085 WARNING app.services.tailor: Finalized CV attempt 9/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:44,488 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:44,509 WARNING app.services.tailor: Finalized CV attempt 10/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:45,668 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 01:37:45,675 WARNING app.services.tailor: Finalized CV attempt 11/12 rejected (FieldValidationError): Field repairs still violate their word, prefix, length or forbidden-term constraints: summary
+2026-09-21 01:37:45,870 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-09-21 01:37:45,870 ERROR root: Tailoring failed for job 1259 [error d39bac0752e1]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_repair.py", line 20, in request_field_repairs
+    result = await client.chat.completions.create(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1764, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for gpt-4o in organization org-ueTSHuG4SGVkF5OSUsDM0mui on tokens per min (TPM): Limit 30000, Used 27794, Requested 4002. Please try again in 3.592s. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2952, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 382, in generate_tailored_result
+    return await _generate_with_repairs(raw_email, master, job_title, settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 398, in _generate_with_repairs
+    replacements = await request_field_repairs(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_repair.py", line 42, in request_field_repairs
+    raise LLMExecutionError("OpenAI field-repair request failed.") from exc
+app.services.cv_tailor.LLMExecutionError: OpenAI field-repair request failed.
+2026-09-21 01:37:52,033 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:60881 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60881 - "GET /api/jobs HTTP/1.1" 200 OK

@@ -35,6 +35,27 @@ def candidate():
     )
 
 
+def rewritten_candidate():
+    payload = candidate()
+    payload.summary = 'Cloud engineer delivering reliable infrastructure through automation, release engineering and service ownership, aligning technical execution with business needs and cross-team delivery priorities.'
+    payload.core_skills = [
+        'Cloud Architecture: Design resilient infrastructure and plan workload capacity around application needs, connecting service availability with reliable operations and consistent environment management for enterprise production systems.',
+        'Delivery Engineering: Support release governance and production readiness through repeatable delivery workflows, automated verification and coordinated change practices that connect software engineering with dependable operational outcomes.',
+        'Leadership & Cross-Functional Collaboration: Take technical ownership, coordinate engineering priorities and communicate operational requirements across teams, supporting shared delivery goals through clear accountability and practical collaboration.',
+    ]
+    payload.experience_bullets = [[
+        "Engineered resilient production workloads through high-availability architecture, sustaining 99.9% uptime while aligning infrastructure design with service reliability needs and supporting dependable operations across the systems used by delivery teams.",
+        "Accelerated software delivery through GitHub Actions workflows and SonarQube quality gates, bringing deployment times below 60 seconds while integrating automated release checks into the engineering process for production changes.",
+        "Reduced recovery time by applying Ansible configuration management alongside Python and Bash maintenance scripts, making infrastructure operations repeatable and helping engineering teams restore dependable service through consistent system maintenance practices.",
+        "Selected Project: Release Automation System - Established Jenkins delivery pipelines with complete artifact traceability, connecting build outputs to release workflows so engineering teams could track the software delivered into production environments.",
+    ], [
+        "Streamlined enterprise release delivery to improve deployment efficiency by 60%, reducing operational errors through repeatable delivery practices that helped teams coordinate software changes and maintain a dependable path into production systems.",
+        "Supported container service readiness in 10-30 seconds by configuring scalable ingress routing, connecting application delivery needs with runtime availability so engineering teams could bring deployed services online reliably and support production workloads.",
+        "Selected Project: Automated Infrastructure Provisioning - Established modular Terraform workflows for environment creation in 5-10 minutes, making infrastructure setup repeatable and helping delivery teams prepare consistent environments for their application deployment requirements.",
+    ]]
+    return payload
+
+
 def master():
     payload = candidate()
     sections = [
@@ -93,6 +114,129 @@ class FinalizedValidationTests(unittest.TestCase):
         self.assertIn('Repeated technology', _tailoring_failure_detail(error))
         self.assertNotIn('after three attempts', _tailoring_failure_detail(error))
 
+    def test_expanded_word_budgets_render_within_full_page(self):
+        payload = candidate()
+        payload.summary = rewritten_candidate().summary
+        payload.experience_bullets[0][0] = (
+            'Designed and governed high-availability cloud architectures across multi-region environments, '
+            'ensuring 99.9% operational uptime for mission-critical enterprise production workloads '
+            'while aligning service reliability and infrastructure operations with business needs and delivery priorities.')
+        self.assertLessEqual(len(payload.summary.split()), 25)
+        self.assertGreater(len(payload.experience_bullets[0][0].split()), 30)
+        context = tailor._context(tailor._source_context(master()), payload)
+        with pdfplumber.open(io.BytesIO(build_ats_pdf(context))) as document:
+            self.assertEqual(len(document.pages), 1)
+            lines = document.pages[0].extract_text_lines()
+            summary_start = next(i for i, line in enumerate(lines) if line['text'] == 'EXECUTIVE SUMMARY')
+            summary_end = next(i for i, line in enumerate(lines) if line['text'] == 'CORE SKILLS')
+            self.assertLessEqual(summary_end - summary_start - 1, 2)
+            self.assertLess(lines[-2]['bottom'], 740)
+            self.assertLess(lines[-2]['bottom'], lines[-1]['top'])
+        payload.experience_bullets[0][0] += ' extra word word word word word'
+        with self.assertRaisesRegex(TailoringError, '35'):
+            tailor._validate(payload)
+
+    def test_copied_bullets_rejected_and_rewritten_bullets_accepted(self):
+        with self.assertRaisesRegex(tailor.FinalizedValidationError, 'unchanged'):
+            tailor._validate_active_rewrite(candidate(), master())
+        tailor._validate_active_rewrite(rewritten_candidate(), master())
+        self.assertEqual(__import__('app.services.cv_tailor', fromlist=['short_role_title']).short_role_title(
+            'Senior Cloud Platform Infrastructure Operations Engineer'), 'Senior Cloud Platform Engineer')
+
+    def test_underfilled_generation_reports_all_fields_without_padding(self):
+        payload = rewritten_candidate()
+        payload.summary = 'Cloud engineer supporting dependable production services.'
+        payload.core_skills[0] = 'Cloud Architecture: Reliable service design.'
+        with self.assertRaisesRegex(tailor.FinalizedValidationError, 'Insufficient technical detail') as caught:
+            tailor._validate_active_rewrite(payload, master())
+        self.assertIn('summary: target 20-25', str(caught.exception))
+        self.assertIn('Core Skills 1: target 25-30', str(caught.exception))
+
+    def test_jd_required_tools_still_cannot_repeat(self):
+        payload = candidate()
+        payload.summary = 'Cloud engineer building reliable AWS production services.'
+        payload.core_skills[0] += ' Amazon Web Services and Terraform.'
+        source = master().raw_text + ' AWS production services.'
+        with self.assertRaises(tailor.DuplicateTechnologyError) as caught:
+            tailor._validate(payload, source, 'AWS and Terraform infrastructure engineering')
+        repairs = {r['technology']: r for r in caught.exception.repairs}
+        self.assertEqual(repairs['Terraform']['keep_in'], 'experience_bullets.1.2')
+        self.assertIn('core_skills.0', repairs['Terraform']['rewrite_without_name_or_alias'])
+        self.assertEqual(repairs['AWS']['occurrences'], {'summary': 1, 'core_skills.0': 1})
+
+    def test_aliases_and_role_title_share_the_strict_budget(self):
+        payload = candidate()
+        payload.role_title = 'Terraform Engineer'
+        with self.assertRaises(tailor.DuplicateTechnologyError) as caught:
+            tailor._validate(payload, master().raw_text, 'Terraform')
+        self.assertIn('role_title', caught.exception.repairs[0]['rewrite_without_name_or_alias'])
+        payload = candidate()
+        payload.core_skills[0] += ' AWS and Amazon Web Services.'
+        with self.assertRaises(tailor.DuplicateTechnologyError) as caught:
+            tailor._validate(payload, master().raw_text, 'AWS')
+        self.assertEqual(caught.exception.repairs[0]['occurrences']['core_skills.0'], 2)
+
+    def test_partial_repairs_preserve_valid_edits_and_untouched_experience(self):
+        payload = rewritten_candidate()
+        error = tailor.FieldValidationError('repair needed', ['summary', 'core_skills.0'])
+        plan = tailor._repair_plan(payload, error)
+        changed_summary = payload.summary.replace('Cloud engineer delivering', 'Cloud engineer providing')
+        repaired, errors = tailor._apply_field_repairs(payload, {
+            'summary': changed_summary,
+            'core_skills.0': payload.core_skills[0] + ' Terraform.',
+        }, plan)
+        self.assertEqual(errors, ['core_skills.0'])
+        self.assertEqual(repaired.summary, changed_summary)
+        self.assertEqual(repaired.core_skills, payload.core_skills)
+        self.assertEqual(repaired.experience_bullets, payload.experience_bullets)
+
+    def test_repair_feedback_keeps_exact_rejection_and_previous_output(self):
+        payload = rewritten_candidate()
+        error = tailor.FieldValidationError('repair', ['summary'])
+        plan = tailor._repair_plan(payload, error)
+        rejected_text = 'Cloud engineer supporting reliable operations.'
+        _, rejected = tailor._apply_field_repairs(payload, {'summary': rejected_text}, plan)
+        self.assertEqual(rejected, ['summary'])
+        self.assertIn('Returned 5 words; required 20-25 words.', plan['summary']['last_rejection']['reasons'])
+        next_plan = tailor._repair_plan(payload, error, plan)
+        self.assertEqual(next_plan['summary']['last_rejection']['text'], rejected_text)
+        tailor._apply_field_repairs(payload, {'summary': rejected_text}, next_plan)
+        self.assertTrue(any('identical' in reason for reason in next_plan['summary']['last_rejection']['reasons']))
+
+    def test_small_overflow_does_not_shorten_every_three_line_bullet(self):
+        payload = rewritten_candidate()
+        fields = [dict(path=f'experience_bullets.{i}.{j}', lines=3, line_height=16,
+                       width=670, prefix_width=0, average_char_width=5.5)
+                  for i, group in enumerate(payload.experience_bullets) for j, _ in enumerate(group)]
+        error = CVOverflowError('page overflow', measurements=dict(
+            content_height=950, available_height=939, fields=fields))
+        plan = tailor._repair_plan(payload, error)
+        self.assertEqual(len(plan), 1)
+        spec = next(iter(plan.values()))
+        self.assertEqual((spec['min_words'], spec['max_words']), (28, 35))
+        self.assertIn('target_characters', spec)
+        self.assertNotIn('max_characters', spec)
+        self.assertEqual(spec['generation_word_count'], 28)
+        next_plan = tailor._repair_plan(payload, error, plan)
+        next_spec = next(iter(next_plan.values()))
+        self.assertLess(next_spec['target_characters'], spec['target_characters'])
+        self.assertEqual(next_spec['generation_word_count'], 28)
+
+    def test_character_estimate_cannot_reject_valid_wording_before_pdf_check(self):
+        payload = rewritten_candidate()
+        path = 'experience_bullets.0.0'
+        plan = tailor._repair_plan(payload, tailor.FieldValidationError('fit', [path]))
+        plan[path]['target_characters'] = 224
+        text = payload.experience_bullets[0][0]
+        self.assertGreater(len(text), 224)
+        repaired, rejected = tailor._apply_field_repairs(payload, {path: text}, plan)
+        self.assertEqual(rejected, [])
+        tailor._validate(repaired, master().raw_text)
+        tailor._validate_active_rewrite(repaired, master())
+        # The estimated target never overrides actual content rules.
+        _, rejected = tailor._apply_field_repairs(payload, {path: 'too short'}, plan)
+        self.assertEqual(rejected, [path])
+
     def test_new_core_skills_key_and_legacy_alias_share_one_schema(self):
         payload = candidate()
         data = payload.model_dump()
@@ -100,18 +244,23 @@ class FinalizedValidationTests(unittest.TestCase):
         self.assertNotIn('technical_expertise', data)
         self.assertEqual(_TailoredPayload.model_validate(data).core_skills, payload.core_skills)
 
-    def test_title_budgets_and_unsupported_claims_are_rejected(self):
+    def test_title_and_skill_word_budgets_are_rejected(self):
         for edit in (
             lambda p: setattr(p, 'role_title', 'Senior Cloud Platform Infrastructure Security Operations Engineering Manager'),
-            lambda p: p.experience_bullets[0].__setitem__(0, 'Improved availability to 99.999% through resilient service design.'),
-            lambda p: p.experience_bullets[0].__setitem__(0, 'Implemented NIST compliance controls across production workloads.'),
-            lambda p: p.experience_bullets[0].__setitem__(0, 'Built Snowflake pipelines for analytics workloads.'),
-            lambda p: p.core_skills.__setitem__(0, 'Cloud Architecture: ' + 'service ' * 29),
+            lambda p: p.core_skills.__setitem__(0, 'Cloud Architecture: ' + 'service ' * 31),
         ):
             payload = candidate()
             edit(payload)
             with self.assertRaises(TailoringError):
                 tailor._validate(payload, master().raw_text)
+
+    def test_scope_expansion_accepts_new_tools_standards_and_metrics(self):
+        payload = candidate()
+        payload.experience_bullets[0][0] = 'Architected NIST controls with Snowflake telemetry, governing 99.99% service uptime.'
+        tailor._validate(payload, master().raw_text, 'NIST Snowflake')
+        plan = tailor._repair_plan(payload, tailor.FieldValidationError('expand', ['core_skills.0']))
+        self.assertNotIn('ArgoCD', plan['core_skills.0']['forbidden_terms'])
+        self.assertIn('Snowflake', plan['core_skills.0']['forbidden_terms'])
 
     def test_saved_text_keeps_finalized_structure_for_job_download(self):
         context = tailor._context(tailor._source_context(master()), candidate())
@@ -139,7 +288,7 @@ class FinalizedValidationTests(unittest.TestCase):
         tailor._validate(candidate())
 
     def test_invalid_structures_and_duplicates_rejected(self):
-        def summary(p): p.summary = "word " * 26
+        def summary(p): p.summary = "word " * 41
         def skills(p): p.technical_expertise.pop()
         def leadership(p): p.technical_expertise[2] = "Teamwork: Coordinate departments."
         def arqon(p): p.experience_bullets[0].pop(0)
@@ -173,7 +322,7 @@ class FinalizedValidationTests(unittest.TestCase):
             lines = page.extract_text_lines()
             start = next(i for i, line in enumerate(lines) if line["text"] == "EXECUTIVE SUMMARY")
             end = next(i for i, line in enumerate(lines) if line["text"] == "CORE SKILLS")
-            self.assertLessEqual(end - start - 1, 2)
+            self.assertLessEqual(end - start - 1, 3)
             self.assertGreaterEqual(min(c['x0'] for c in page.chars), 35.5)
             self.assertLessEqual(max(c['x1'] for c in page.chars), 576.5)
             self.assertLessEqual(max(c['bottom'] for c in page.chars), 756.5)
@@ -185,6 +334,7 @@ class FinalizedValidationTests(unittest.TestCase):
         html = render_cv_html(context)
         self.assertIn('#0043ce', html)
         self.assertNotIn('space-between', html)
+        self.assertNotIn('min-height:', html)
         self.assertEqual(html.count('<li '), 14)
         self.assertEqual(html.count('class="skills-row"'), 3)
         self.assertEqual(html.count('class="selected-project"'), 2)
@@ -216,6 +366,48 @@ class FinalizedValidationTests(unittest.TestCase):
 
 
 class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
+    async def test_expanded_metric_does_not_trigger_source_membership_repair(self):
+        good = rewritten_candidate()
+        bad = good.model_copy(deep=True)
+        bad.experience_bullets[0][0] = bad.experience_bullets[0][0].replace('99.9%', '99.999%')
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=bad)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(return_value={
+                    'experience_bullets.0.0': good.experience_bullets[0][0]})) as repair, \
+                patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF'):
+            await tailor.generate_tailored_result('Cloud services', master())
+        request.assert_awaited_once()
+        repair.assert_not_awaited()
+
+    def test_misplaced_project_is_targeted_without_preserving_wrong_prefix(self):
+        bad = rewritten_candidate()
+        bad.experience_bullets[0][0] = 'Selected Project: ' + bad.experience_bullets[0][0]
+        with self.assertRaises(tailor.FieldValidationError) as caught:
+            tailor._validate(bad, master().raw_text)
+        plan = tailor._repair_plan(bad, caught.exception)
+        self.assertEqual(set(plan), {'experience_bullets.0.0'})
+        self.assertEqual(plan['experience_bullets.0.0']['required_prefix'], '')
+
+    async def test_overflow_repair_renders_one_page_without_character_rejections(self):
+        original = rewritten_candidate()
+        fixed = original.model_copy(deep=True)
+        fixed.core_skills[1] = 'Delivery Engineering: Guide release checks and service readiness with clear change plans, repeatable build steps and shared review practices that help teams deliver reliable production changes.'
+        fixed.core_skills[2] = 'Leadership & Cross-Functional Collaboration: Lead technical work, align team goals and share service needs across groups to support clear ownership, sound decisions and reliable software delivery.'
+        fixed.experience_bullets[0][0] = 'Built resilient cloud systems to sustain 99.9% uptime for live workloads, linking high availability design to service needs so teams could run critical systems with fewer service disruptions.'
+        fixed.experience_bullets[0][2] = 'Used Ansible with Python and Bash scripts to make system setup and upkeep repeatable, reduce recovery time and help teams restore services with clear, consistent steps during operational work.'
+        fixed.experience_bullets[0][3] = 'Selected Project: Release Automation System - Built Jenkins release flows to track each artifact from build to deployment, giving teams a clear record of software changes across production stages.'
+        fixed.experience_bullets[1][0] = 'Raised release delivery efficiency by 60% through repeatable workflows that reduced errors, helped teams manage software changes and made each deployment easier to carry out across complex enterprise systems.'
+        fixed.experience_bullets[1][1] = 'Configured scalable ingress routes for container workloads to reach service readiness in 10-30 seconds, helping teams bring services online and meet runtime needs with reliable traffic paths for deployed applications.'
+        async def repair(settings, fields, context, feedback):
+            return {path: tailor._editable_fields(fixed)[path] for path in fields}
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=original)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=repair)) as repair_call:
+            result, pdf = await tailor.generate_tailored_result('Reliable cloud services', master())
+        request.assert_awaited_once()
+        repair_call.assert_awaited_once()
+        self.assertEqual(len(PdfReader(io.BytesIO(pdf)).pages), 1)
+        self.assertIn(original.experience_bullets[1][2], result.text)
+        self.assertGreater(len(original.experience_bullets[1][2]), 222)
+
     async def test_job_list_uses_same_grounded_pipeline_as_email(self):
         expected = object()
         with patch.object(tailor, 'generate_tailored_result', new=AsyncMock(return_value=(expected, b'%PDF'))) as generate:
@@ -223,18 +415,61 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertIs(result, expected)
             generate.assert_awaited_once()
     async def test_jd_title_and_rulebook_reach_model_and_corrected_candidate_is_validated(self):
-        invalid = candidate()
-        invalid.summary = 'word ' * 26
-        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(side_effect=[invalid, candidate()])) as request, \
+        invalid = rewritten_candidate()
+        invalid.summary = 'word ' * 41
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(
+                    return_value={'summary': rewritten_candidate().summary})) as repair, \
                 patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF') as render:
             pdf = await tailor.generate_tailored_resume('Target job description', master(), 'Cloud Engineer')
-            self.assertEqual(pdf, b'%PDF')
-            self.assertIn('Target job description', request.call_args_list[0].args[1])
-            self.assertIn('Cloud Engineer', request.call_args_list[0].args[1])
-            self.assertEqual(request.call_args.kwargs['system_prompt'], tailor.RULEBOOK)
-            self.assertEqual(request.await_count, 2)
-            render.assert_called_once()
-            self.assertTrue(render.call_args.args[0]['finalized'])
+        self.assertEqual(pdf, b'%PDF')
+        self.assertIn('Target job description', request.call_args.args[1])
+        self.assertEqual(request.call_args.kwargs['system_prompt'], tailor.RULEBOOK)
+        self.assertEqual(request.await_count, 1)
+        self.assertEqual(set(repair.call_args.args[1]), {'summary'})
+        render.assert_called_once()
+
+    async def test_duplicate_retry_repairs_only_failing_field_and_keeps_rules(self):
+        invalid = rewritten_candidate()
+        invalid.core_skills[0] += ' Terraform.'
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(
+                    return_value={'core_skills.0': rewritten_candidate().core_skills[0]})) as repair, \
+                patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF') as render:
+            await tailor.generate_tailored_resume('Terraform engineering', master(), 'Cloud Engineer')
+        self.assertEqual(request.await_count, 1)
+        plan = repair.call_args.args[1]
+        self.assertEqual(set(plan), {'core_skills.0'})
+        self.assertIn('Terraform', plan['core_skills.0']['forbidden_terms'])
+        self.assertEqual(plan['core_skills.0']['min_words'], 25)
+        self.assertEqual(render.call_args.args[0]['experience'][1]['bullets'], invalid.experience_bullets[1])
+
+    async def test_repair_continues_past_three_attempts_without_regenerating_good_fields(self):
+        invalid = rewritten_candidate()
+        invalid.core_skills[0] += ' Terraform.'
+        responses = [{'core_skills.0': invalid.core_skills[0]}] * 3 + [
+            {'core_skills.0': rewritten_candidate().core_skills[0]}]
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=responses)) as repair, \
+                patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF'):
+            result, pdf = await tailor.generate_tailored_result('Terraform engineering', master())
+        self.assertEqual(pdf, b'%PDF')
+        self.assertEqual(request.await_count, 1)
+        self.assertEqual(repair.await_count, 4)
+        self.assertIn(invalid.summary, result.text)
+
+    async def test_invalid_patch_retries_same_fields_without_losing_candidate(self):
+        invalid = rewritten_candidate()
+        invalid.core_skills[0] += ' Terraform.'
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=[
+                    tailor.PayloadFormatError('Invalid patch JSON'),
+                    {'core_skills.0': rewritten_candidate().core_skills[0]}])) as repair, \
+                patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF'):
+            await tailor.generate_tailored_resume('Terraform engineering', master())
+        self.assertEqual(request.await_count, 1)
+        self.assertEqual(repair.await_count, 2)
+        self.assertEqual(repair.call_args_list[0].args[1], repair.call_args_list[1].args[1])
 
     async def test_provider_failure_is_not_retried(self):
         with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(side_effect=LLMExecutionError('offline'))) as request:
@@ -243,8 +478,25 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(request.await_count, 1)
 
     async def test_overflow_retries_are_bounded(self):
-        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=candidate())) as request, \
+        from app.config import Settings
+        payload = rewritten_candidate()
+        async def replacements(settings, fields, *args):
+            return {path: tailor._editable_fields(payload)[path] for path in fields}
+        with patch.object(tailor, 'get_settings', return_value=Settings(_env_file=None, tailoring_max_attempts=5)), \
+                patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=payload)) as request, \
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=replacements)) as repair, \
                 patch.object(tailor, 'build_ats_pdf', side_effect=CVOverflowError('too long')):
-            with self.assertRaisesRegex(TailoringError, 'three attempts'):
+            with self.assertRaisesRegex(TailoringError, '5 attempts'):
                 await tailor.generate_tailored_resume('JD', master())
-            self.assertEqual(request.await_count, 3)
+        self.assertEqual(request.await_count, 1)
+        self.assertEqual(repair.await_count, 4)
+
+    async def test_deadline_stops_generation(self):
+        import asyncio
+        settings = SimpleNamespace(tailoring_max_attempts=12, tailoring_timeout_seconds=.01)
+        async def slow(*args, **kwargs):
+            await asyncio.sleep(2)
+        with patch.object(tailor, 'get_settings', return_value=settings), \
+                patch.object(tailor, '_request_tailored_payload', new=AsyncMock(side_effect=slow)):
+            with self.assertRaisesRegex(TailoringError, 'seconds'):
+                await tailor.generate_tailored_resume('JD', master())

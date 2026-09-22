@@ -1,0 +1,82 @@
+INFO:     127.0.0.1:53610 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57357 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57829 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63913 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63913 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57357 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57829 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57829 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57357 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63913 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57829 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63913 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65131 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 22:37:33,500 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:33,549 WARNING app.services.tailor: Finalized CV attempt 1/3 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: Terraform (summary, core_skills.0, experience_bullets.1.2)
+2026-09-20 22:37:35,812 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:35,841 WARNING app.services.tailor: Finalized CV attempt 2/3 rejected (FinalizedValidationError): Compliance/framework claim is not supported by the Master CV: FedRAMP
+2026-09-20 22:37:38,111 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:38,153 WARNING app.services.tailor: Finalized CV attempt 3/3 rejected (FinalizedValidationError): Insufficient technical detail: summary: target 35-40 words; Core Skills 1: target 25-30 words; Core Skills 2: target 25-30 words; Core Skills 3: target 25-30 words; employer 1 bullet 1: target 28-35 words; employer 1 bullet 2: target 28-35 words; employer 1 bullet 3: target 28-35 words; employer 1 bullet 4: target 28-35 words; employer 2 bullet 1: target 28-35 words; employer 2 bullet 2: target 28-35 words; employer 2 bullet 3: target 28-35 words. Expand using verified action, implementation and impact; never invent facts or metrics.
+2026-09-20 22:37:38,153 ERROR root: Tailoring failed for job 1259 [error 86bd4637a30a]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 296, in generate_tailored_result
+    _validate_active_rewrite(payload, master)
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 280, in _validate_active_rewrite
+    raise FinalizedValidationError("Insufficient technical detail: " + "; ".join(underfilled) +
+app.services.tailor.FinalizedValidationError: Insufficient technical detail: summary: target 35-40 words; Core Skills 1: target 25-30 words; Core Skills 2: target 25-30 words; Core Skills 3: target 25-30 words; employer 1 bullet 1: target 28-35 words; employer 1 bullet 2: target 28-35 words; employer 1 bullet 3: target 28-35 words; employer 1 bullet 4: target 28-35 words; employer 2 bullet 1: target 28-35 words; employer 2 bullet 2: target 28-35 words; employer 2 bullet 3: target 28-35 words. Expand using verified action, implementation and impact; never invent facts or metrics.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2952, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 327, in generate_tailored_result
+    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+app.services.cv_tailor.TailoringError: Finalized CV did not pass structure, deduplication or one-page validation after three attempts.
+2026-09-20 22:37:39,298 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:58794 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 22:37:46,685 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:46,706 WARNING app.services.tailor: Finalized CV attempt 1/3 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (summary, core_skills.0, experience_bullets.1.2); Jenkins (core_skills.1, experience_bullets.0.3); NIST (summary, core_skills.0)
+2026-09-20 22:37:48,913 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:48,961 WARNING app.services.tailor: Finalized CV attempt 2/3 rejected (FinalizedValidationError): Insufficient technical detail: summary: target 35-40 words; Core Skills 1: target 25-30 words; Core Skills 2: target 25-30 words; Core Skills 3: target 25-30 words; employer 1 bullet 1: target 28-35 words; employer 1 bullet 2: target 28-35 words; employer 1 bullet 3: target 28-35 words; employer 1 bullet 4: target 28-35 words; employer 2 bullet 1: target 28-35 words; employer 2 bullet 2: target 28-35 words; employer 2 bullet 3: target 28-35 words. Expand using verified action, implementation and impact; never invent facts or metrics.
+2026-09-20 22:37:52,911 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 22:37:52,938 WARNING app.services.tailor: Finalized CV attempt 3/3 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (core_skills.1, experience_bullets.1.2)
+2026-09-20 22:37:52,938 ERROR root: Tailoring failed for job 1259 [error 62c1c0897e12]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 295, in generate_tailored_result
+    context = _context(source, payload, master.raw_text, raw_email)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 224, in _context
+    _validate(payload, master_text, job_description)
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 201, in _validate
+    raise DuplicateTechnologyError(repairs)
+app.services.tailor.DuplicateTechnologyError: Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (core_skills.1, experience_bullets.1.2)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2952, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 327, in generate_tailored_result
+    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+app.services.cv_tailor.TailoringError: Finalized CV did not pass structure, deduplication or one-page validation after three attempts.
+2026-09-20 22:37:53,930 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:58794 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/jobs HTTP/1.1" 200 OK

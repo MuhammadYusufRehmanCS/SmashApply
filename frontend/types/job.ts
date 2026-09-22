@@ -55,6 +55,8 @@ export interface MasterCv {
 }
 
 export interface TailorResult {
+  used_fallback: boolean;
+  warning: string | null;
   job_id: number;
   keywords: string[];
   tailored_cv: string;

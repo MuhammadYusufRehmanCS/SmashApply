@@ -84,7 +84,7 @@ async def fit_tailored_cv(result, master, title, company, description):
             context = result.template_data
             _validate(_TailoredPayload(role_title=context["role_title"], summary=context["summary"],
                                        core_skills=context["core_skills"],
-                                       experience_bullets=context["experience_bullets"]), master.raw_text)
+                                       experience_bullets=context["experience_bullets"]), master.raw_text, description)
             pdf = await asyncio.to_thread(build_ats_pdf, context)
             return result, pdf
         except (TailoringError, CVOverflowError):
@@ -139,7 +139,7 @@ async def fit_tailored_cv(result, master, title, company, description):
                   "and operational impact in EVERY bullet while shortening wording. Condense repeated "
                   "skills and summary text before sacrificing the engineering narrative. "
                   "Do not alter headings, dates, contact details, or education. "
-                + f"Use at most {word_budget} words per experience bullet and at most 25 words for the summary. "
+                + f"Use at most {word_budget} words per experience bullet and at most 40 words for the summary. "
                   "Condense skills lists to the most relevant tools; avoid repeated keywords. "
                   "Do not output formatting or layout changes.\nCurrent candidate (content to edit):\n"
                 + json.dumps(result.text)

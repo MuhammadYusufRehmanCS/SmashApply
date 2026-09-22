@@ -1,0 +1,75 @@
+INFO:     127.0.0.1:50375 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58047 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62497 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+2026-09-21 11:22:04,760 ERROR asyncio: Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost(None)>
+Traceback (most recent call last):
+  File "C:\Python312\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python312\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+INFO:     127.0.0.1:63864 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57256 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63864 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "OPTIONS /api/jobs/1259/toggle-applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "PATCH /api/jobs/1259/toggle-applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "OPTIONS /api/jobs/1259/toggle-applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "PATCH /api/jobs/1259/toggle-applied HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-21 11:22:17,709 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:17,796 WARNING app.services.tailor: Finalized CV attempt 1/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, experience_bullets.0.0); Terraform (summary, core_skills.0, experience_bullets.1.2); Jenkins (core_skills.1, experience_bullets.0.3)
+2026-09-21 11:22:23,855 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:23,863 WARNING app.services.tailor: Finalized CV attempt 2/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 19 words; required 25-30 words."], "core_skills.1": ["Returned 19 words; required 25-30 words."], "summary": ["Returned 50 words; required 35-40 words."]}
+2026-09-21 11:22:26,730 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:26,754 WARNING app.services.tailor: Finalized CV attempt 3/12 rejected (FieldValidationError): Field repairs rejected: {"summary": ["Returned 49 words; required 35-40 words."]}
+2026-09-21 11:22:28,098 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:28,106 WARNING app.services.tailor: Finalized CV attempt 4/12 rejected (FieldValidationError): Field repairs rejected: {"summary": ["Returned 49 words; required 35-40 words.", "This is identical to the previous rejected replacement; produce a different correction."]}
+2026-09-21 11:22:29,717 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:29,721 WARNING app.services.tailor: Finalized CV attempt 5/12 rejected (FieldValidationError): Field repairs rejected: {"summary": ["Returned 49 words; required 35-40 words.", "This is identical to the previous rejected replacement; produce a different correction."]}
+2026-09-21 11:22:31,181 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:31,203 WARNING app.services.tailor: Finalized CV attempt 6/12 rejected (FieldValidationError): Field repairs rejected: {"summary": ["Returned 50 words; required 35-40 words."]}
+2026-09-21 11:22:32,942 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:32,965 WARNING app.services.tailor: Finalized CV attempt 7/12 rejected (FieldValidationError): Field repairs rejected: {"summary": ["Returned 42 words; required 35-40 words."]}
+2026-09-21 11:22:34,289 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:34,392 WARNING app.services.tailor: Finalized CV attempt 8/12 rejected (FieldValidationError): Insufficient technical detail: Core Skills 3: target 25-30 words; employer 1 bullet 1: target 28-35 words; employer 1 bullet 2: target 28-35 words; employer 1 bullet 3: target 28-35 words; employer 1 bullet 4: target 28-35 words; employer 2 bullet 1: target 28-35 words; employer 2 bullet 2: target 28-35 words; employer 2 bullet 3: target 28-35 words. Expand using verified action, implementation and impact; never invent facts or metrics.
+2026-09-21 11:22:39,627 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:39,666 WARNING app.services.tailor: Finalized CV attempt 9/12 rejected (FieldValidationError): Field repairs rejected: {"experience_bullets.0.1": ["Returned 25 words; required 28-35 words."], "experience_bullets.0.2": ["Returned 22 words; required 28-35 words."], "experience_bullets.0.3": ["Returned 24 words; required 28-35 words."], "experience_bullets.1.0": ["Returned 23 words; required 28-35 words."], "experience_bullets.1.1": ["Returned 19 words; required 28-35 words."], "experience_bullets.1.2": ["Returned 24 words; required 28-35 words."]}
+2026-09-21 11:22:43,527 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:43,553 WARNING app.services.tailor: Finalized CV attempt 10/12 rejected (FieldValidationError): Field repairs rejected: {"experience_bullets.0.1": ["Returned 27 words; required 28-35 words."], "experience_bullets.0.2": ["Returned 25 words; required 28-35 words."], "experience_bullets.0.3": ["Returned 26 words; required 28-35 words."], "experience_bullets.1.0": ["Returned 23 words; required 28-35 words."], "experience_bullets.1.1": ["Returned 22 words; required 28-35 words."], "experience_bullets.1.2": ["Returned 25 words; required 28-35 words."]}
+2026-09-21 11:22:43,836 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-09-21 11:22:43,839 WARNING app.services.openai_retry: Temporary OpenAI rate limit; waiting 3.24s before retrying the same request
+2026-09-21 11:22:50,093 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:22:58,051 WARNING app.services.tailor: Finalized CV attempt 11/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:22:58,221 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-09-21 11:22:58,224 WARNING app.services.openai_retry: Temporary OpenAI rate limit; waiting 0.69s before retrying the same request
+2026-09-21 11:23:02,690 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:23:02,721 WARNING app.services.tailor: Finalized CV attempt 12/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.2": ["Returned 250 characters; maximum 221."], "experience_bullets.0.0": ["Returned 263 characters; maximum 224."], "experience_bullets.0.1": ["Returned 272 characters; maximum 221."], "experience_bullets.0.2": ["Returned 278 characters; maximum 219."], "experience_bullets.0.3": ["Returned 283 characters; maximum 218."], "experience_bullets.1.0": ["Returned 272 characters; maximum 224."], "experience_bullets.1.1": ["Returned 277 characters; maximum 229."], "experience_bullets.1.2": ["Returned 272 characters; maximum 222."]}
+2026-09-21 11:23:02,737 ERROR root: Tailoring failed for job 1259 [error 0a0315cca1b5]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 427, in _generate_with_repairs
+    raise FieldValidationError("Field repairs rejected: " + json.dumps(reasons), rejected)
+app.services.tailor.FieldValidationError: Field repairs rejected: {"core_skills.2": ["Returned 250 characters; maximum 221."], "experience_bullets.0.0": ["Returned 263 characters; maximum 224."], "experience_bullets.0.1": ["Returned 272 characters; maximum 221."], "experience_bullets.0.2": ["Returned 278 characters; maximum 219."], "experience_bullets.0.3": ["Returned 283 characters; maximum 218."], "experience_bullets.1.0": ["Returned 272 characters; maximum 224."], "experience_bullets.1.1": ["Returned 277 characters; maximum 229."], "experience_bullets.1.2": ["Returned 272 characters; maximum 222."]}
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 176, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2953, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 406, in generate_tailored_result
+    return await _generate_with_repairs(raw_email, master, job_title, settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 451, in _generate_with_repairs
+    raise TailoringError(f"Finalized CV did not pass validation after {settings.tailoring_max_attempts} attempts. "
+app.services.cv_tailor.TailoringError: Finalized CV did not pass validation after 12 attempts. No invalid resume was accepted.
+2026-09-21 11:23:04,970 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:51773 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51773 - "GET /api/jobs HTTP/1.1" 200 OK

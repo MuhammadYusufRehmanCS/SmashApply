@@ -139,8 +139,8 @@ def build_ats_pdf(content: dict | str, layout: dict | None = None) -> bytes:
     from app.services.cv_tailor import template_context_from_text
 
     context = template_context_from_text(content) if isinstance(content, str) else content
-    if len(context.get("summary", "").replace("**", "").split()) > 25:
-        raise CVOverflowError("Executive Summary exceeds the 25-word limit.")
+    if len(context.get("summary", "").replace("**", "").split()) > 40:
+        raise CVOverflowError("Executive Summary exceeds the 40-word limit.")
     html = render_cv_html(context)
     local_browsers = Path(__file__).resolve().parents[2] / ".playwright"
     if local_browsers.is_dir():
@@ -188,27 +188,23 @@ async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
                 const header = document.querySelector('#header');
                 const role = header?.querySelector('[data-header-role]');
                 if (role) {
-                    // Word counts cannot predict the width of a fixed-font title.
-                    // Trim only its display suffix; never resize fonts or body text.
                     const words = role.textContent.trim().split(/\s+/);
-                    const trimConnector = () => {
-                        while (words.length > 1 && /^(?:&|and|or|[-/])$/i.test(words.at(-1))) words.pop();
-                    };
                     const range = document.createRange();
                     range.selectNodeContents(header);
                     const available = header.getBoundingClientRect().width;
-                    trimConnector();
-                    role.textContent = words.join(' ');
-                    while (range.getBoundingClientRect().width > available + 0.5 && words.length > 1) {
-                        words.pop();
-                        trimConnector();
+                    while (range.getBoundingClientRect().width > available + 0.5 && words.length > 2) {
+                        // Keep the final role noun (Engineer, Architect, etc.).
+                        const modifier = words.findIndex(w => /^(senior|junior|lead|principal|staff|sr\.?|jr\.?)$/i.test(w));
+                        words.splice(words.length > 3 ? words.length - 2 : (modifier >= 0 ? modifier : words.length - 2), 1);
                         role.textContent = words.join(' ');
                     }
+                    // If the meaningful title still cannot fit beside the banner,
+                    // wrap the header naturally rather than dropping its role noun.
                     if (range.getBoundingClientRect().width > available + 0.5)
-                        return 'Header role cannot fit at the fixed font size. Use a shorter role title.';
+                        header.style.whiteSpace = 'normal';
                 }
-                if (header && header.getBoundingClientRect().height > parseFloat(getComputedStyle(header).lineHeight) + 0.5)
-                    return 'Header exceeds one physical line. Shorten the role suffix without changing font size.';
+                if (header && header.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(header).lineHeight) + 0.5)
+                    return 'Header exceeds two physical lines. Shorten the role suffix without changing font size.';
                 const summary = document.querySelector('[data-summary]');
                 const lineHeight = summary ? parseFloat(getComputedStyle(summary).lineHeight) : 0;
                 if (summary && summary.getBoundingClientRect().height > 2 * lineHeight + 0.5)
@@ -218,7 +214,7 @@ async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
                 return null;
             }""")
             if finalized_error:
-                raise CVOverflowError(finalized_error)
+                raise CVOverflowError(finalized_error, measurements=await _measure_wording(page))
             pdf = await page.pdf(prefer_css_page_size=True, print_background=True,
                                  display_header_footer=False)
             # Measure only after exporting. The diagnostic DOM never changes the
@@ -226,6 +222,11 @@ async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
             measurements = None
             if len(PdfReader(io.BytesIO(pdf)).pages) != 1:
                 measurements = await _measure_wording(page)
+            if len(PdfReader(io.BytesIO(pdf)).pages) == 1:
+                footer_overflow = await page.evaluate("() => document.querySelector('.cv-page').getBoundingClientRect().height > 704 * 4 / 3 + 0.5")
+                if footer_overflow:
+                    raise CVOverflowError("CV exceeds the one-page content budget reserved above the footer.",
+                                          measurements=await _measure_wording(page))
             return pdf, measurements
         finally:
             await browser.close()
@@ -245,7 +246,8 @@ async def _measure_wording(page) -> dict:
         };
         const dimensions = rule.style.getPropertyValue('size').trim().split(/\\s+/);
         const width = px(dimensions[0]) - px(rule.style.marginLeft) - px(rule.style.marginRight);
-        const available = px(dimensions[1]) - px(rule.style.marginTop) - px(rule.style.marginBottom);
+        const available = document.body.hasAttribute('data-finalized-cv') ? px('704pt') :
+            px(dimensions[1]) - px(rule.style.marginTop) - px(rule.style.marginBottom) - px("16pt");
         document.body.style.width = `${width}px`;
         const fields = [];
         const add = (element, path, prefix = '') => {

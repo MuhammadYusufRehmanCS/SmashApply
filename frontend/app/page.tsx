@@ -132,7 +132,12 @@ export default function DashboardPage() {
     setActioningId(job.id);
     setActionError(null);
     try {
-      await api.tailorJob(job.id);
+      const result = await api.tailorJob(job.id);
+      if (result.used_fallback) {
+        setActionError(result.warning ?? "New tailoring failed. The saved resume is unchanged.");
+        await refreshJobs();
+        return;
+      }
       const { blob, filename } = await api.downloadCv(job.id);
       saveBlob(blob, filename);
       await refreshJobs();
@@ -147,7 +152,12 @@ export default function DashboardPage() {
     setTailoringId(job.id);
     setActionError(null);
     try {
-      await api.tailorJob(job.id);
+      const result = await api.tailorJob(job.id);
+      if (result.used_fallback) {
+        setActionError(result.warning ?? "New tailoring failed. The saved resume is unchanged.");
+        await refreshJobs();
+        return;
+      }
       await refreshJobs();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));

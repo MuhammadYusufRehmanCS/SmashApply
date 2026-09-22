@@ -1,0 +1,120 @@
+INFO:     127.0.0.1:58528 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58529 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57030 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61724 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60760 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61724 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60760 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57030 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62244 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57194 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 20:58:20,441 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:20,506 WARNING app.services.tailor: Finalized CV attempt 1/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:23,897 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:23,946 WARNING app.services.tailor: Finalized CV attempt 2/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:26,700 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:26,752 WARNING app.services.tailor: Finalized CV attempt 3/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:26,752 ERROR root: Tailoring failed for job 1259 [error 6c6a47dd62ce]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 264, in generate_tailored_result
+    context = _context(source, payload, master.raw_text)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 193, in _context
+    _validate(payload, master_text)
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 169, in _validate
+    raise FinalizedValidationError(
+app.services.tailor.FinalizedValidationError: Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2945, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 289, in generate_tailored_result
+    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+app.services.cv_tailor.TailoringError: Finalized CV did not pass structure, deduplication or one-page validation after three attempts.
+2026-09-20 20:58:27,992 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:57194 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57194 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57194 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60659 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 20:58:44,897 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:44,918 WARNING app.services.tailor: Finalized CV attempt 1/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:47,228 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:47,255 WARNING app.services.tailor: Finalized CV attempt 2/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:49,501 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:58:49,522 WARNING app.services.tailor: Finalized CV attempt 3/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+2026-09-20 20:58:49,529 ERROR root: Tailoring failed for job 1259 [error fcf746346264]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 264, in generate_tailored_result
+    context = _context(source, payload, master.raw_text)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 193, in _context
+    _validate(payload, master_text)
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 169, in _validate
+    raise FinalizedValidationError(
+app.services.tailor.FinalizedValidationError: Repeated technology; keep each in its Selected Project when applicable: AWS, Terraform
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2945, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 289, in generate_tailored_result
+    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+app.services.cv_tailor.TailoringError: Finalized CV did not pass structure, deduplication or one-page validation after three attempts.
+2026-09-20 20:58:50,517 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:60659 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60659 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60659 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54645 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57977 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54645 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52305 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57977 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 20:59:06,390 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:59:06,431 WARNING app.services.tailor: Finalized CV attempt 1/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Kubernetes, Terraform, Jenkins
+2026-09-20 20:59:09,279 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:59:09,322 WARNING app.services.tailor: Finalized CV attempt 2/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Kubernetes, Terraform, Jenkins
+2026-09-20 20:59:13,209 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-20 20:59:13,251 WARNING app.services.tailor: Finalized CV attempt 3/3 rejected (FinalizedValidationError): Repeated technology; keep each in its Selected Project when applicable: AWS, Kubernetes, Terraform, Jenkins
+2026-09-20 20:59:13,251 ERROR root: Tailoring failed for job 1259 [error b543d1681cdb]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 264, in generate_tailored_result
+    context = _context(source, payload, master.raw_text)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 193, in _context
+    _validate(payload, master_text)
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 169, in _validate
+    raise FinalizedValidationError(
+app.services.tailor.FinalizedValidationError: Repeated technology; keep each in its Selected Project when applicable: AWS, Kubernetes, Terraform, Jenkins
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 172, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2945, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 289, in generate_tailored_result
+    raise TailoringError("Finalized CV did not pass structure, deduplication or one-page validation after three attempts.") from last_error
+app.services.cv_tailor.TailoringError: Finalized CV did not pass structure, deduplication or one-page validation after three attempts.
+2026-09-20 20:59:14,230 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:63832 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "GET /api/jobs HTTP/1.1" 200 OK

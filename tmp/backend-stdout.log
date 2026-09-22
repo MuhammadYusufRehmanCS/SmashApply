@@ -1,2 +1,656 @@
 INFO:     127.0.0.1:49974 - "GET /api/health HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49996 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55397 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55397 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55397 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63257 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50259 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52631 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62343 - "OPTIONS /api/jobs/1265/tailor HTTP/1.1" 200 OK
+2026-09-20 16:36:26,519 ERROR root: Tailoring failed for job 1265 [error d73597b9830e]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    completion = await client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    payload = await _request_tailored_payload(get_settings(), prompt, system_prompt=RULEBOOK)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    raise LLMExecutionError(
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+INFO:     127.0.0.1:62343 - "POST /api/jobs/1265/tailor HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:61006 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53927 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50636 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51452 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61006 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50636 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51452 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53927 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 16:37:57,646 ERROR root: Tailoring failed for job 1259 [error cfbbd0c3c973]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    completion = await client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    payload = await _request_tailored_payload(get_settings(), prompt, system_prompt=RULEBOOK)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    raise LLMExecutionError(
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+2026-09-20 16:38:00,122 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:61911 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "GET /api/jobs/1259/download-cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61911 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "POST /api/cv/upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57053 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50865 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57053 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50865 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61579 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 16:38:40,169 ERROR root: Tailoring failed for job 1259 [error ec4e210d58ad]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    completion = await client.chat.completions.create(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    payload = await _request_tailored_payload(get_settings(), prompt, system_prompt=RULEBOOK)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    raise LLMExecutionError(
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+2026-09-20 16:38:45,048 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:55679 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "GET /api/jobs/1259/download-cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55679 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58814 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59438 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60629 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63866 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59438 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63866 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60629 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58814 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50688 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 16:56:13,456 ERROR root: Tailoring failed for job 1259 [error 67a50f891d0a]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    if not api_key:
+                    
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    payload = await _request_tailored_payload(get_settings(), prompt, system_prompt=RULEBOOK)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    "keywords": {"type": "array", "items": {"type": "string"}},
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+2026-09-20 16:56:14,622 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:50688 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50688 - "GET /api/jobs/1259/download-cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50688 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50688 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56885 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59383 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61065 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59383 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61065 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56885 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 18:46:20,957 ERROR root: Tailoring failed for job 1259 [error 8c3400b3ba4b]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    skills_entries: list[dict] | None,
+                         ^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+    job_title,
+               
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    copied = []
+                
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    async with AsyncOpenAI(api_key=api_key, timeout=180.0, max_retries=0) as client:
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+INFO:     127.0.0.1:54371 - "POST /api/jobs/1259/tailor HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:52215 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53648 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52734 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62722 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52215 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52734 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53648 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62722 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62722 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-20 18:46:34,160 ERROR root: Tailoring failed for job 1259 [error efa56458fe1b]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 98, in map_httpcore_exceptions
+    yield
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 388, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 242, in handle_async_request
+    raise exc from None
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection_pool.py", line 224, in handle_async_request
+    response = await connection.handle_async_request(pool_request.request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 94, in handle_async_request
+    raise exc
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 74, in handle_async_request
+    stream = await self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_async\connection.py", line 117, in _connect
+    stream = await self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\auto.py", line 31, in connect_tcp
+    return await self._backend.connect_tcp(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_backends\anyio.py", line 115, in connect_tcp
+    with map_exceptions(exc_map):
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpcore2\_exceptions.py", line 17, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1699, in request
+    response = await self._send_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1325, in _send_request
+    response = await self._send_with_auth_retry(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_client.py", line 1304, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1618, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1818, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1846, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1881, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_client.py", line 1915, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 387, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\httpx2\_transports\default.py", line 115, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx2.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2784, in _request_tailored_payload
+    skills_entries: list[dict] | None,
+                         ^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 2907, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1979, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\.venv\Lib\site-packages\openai\_base_client.py", line 1734, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 166, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2912, in tailor_cv
+    job_title,
+               
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 228, in generate_tailored_result
+    copied = []
+                
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2808, in _request_tailored_payload
+    async with AsyncOpenAI(api_key=api_key, timeout=180.0, max_retries=0) as client:
+app.services.cv_tailor.LLMExecutionError: OpenAI API request failed (model='gpt-4o', options={'temperature': 0.7}): Connection error.
+INFO:     127.0.0.1:62722 - "POST /api/jobs/1259/tailor HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:60692 - "GET /api/health HTTP/1.1" 200 OK

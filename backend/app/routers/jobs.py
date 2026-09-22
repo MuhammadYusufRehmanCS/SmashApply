@@ -119,7 +119,7 @@ def _has_cached_tailoring(job: Job, cv: MasterCV | None = None) -> bool:
                 context = template_context_from_text(job.tailored_cv)
                 _validate(_TailoredPayload(role_title=context["role_title"], summary=context["summary"],
                                            core_skills=context["core_skills"],
-                                           experience_bullets=context["experience_bullets"]), cv.raw_text)
+                                           experience_bullets=context["experience_bullets"]), cv.raw_text, job.description or job.title)
             except (TailoringError, ValidationError, KeyError):
                 return False
     return present and (cv is None or has_reframed_experience(job.tailored_cv, json.loads(cv.sections_json)))
@@ -133,12 +133,22 @@ def _tailoring_failure_detail(exc: Exception) -> str:
         chain.append(current)
         current = current.__cause__
     if any(isinstance(item, LLMExecutionError) for item in chain):
+        from openai import APIConnectionError, APITimeoutError
+        if any(isinstance(item, APITimeoutError) for item in chain):
+            return "The OpenAI request timed out. Please retry when the connection is stable."
+        if any(isinstance(item, APIConnectionError) for item in chain):
+            return ("The backend could not connect to OpenAI. Run it with normal network access "
+                    "and check firewall, proxy or VPN settings. No model response was received.")
         status = next((getattr(item, "status_code", None) for item in chain
                        if getattr(item, "status_code", None)), None)
         if status == 401:
             return "OpenAI rejected the API key. Check OPENAI_API_KEY in backend/.env."
         if status == 429:
-            return "OpenAI rejected the request due to a rate or quota limit. Check API billing and limits."
+            from app.services.openai_retry import is_quota_error
+            if any(is_quota_error(item) for item in chain):
+                return "OpenAI reported insufficient API quota. Check the API project's credit balance and spending limit."
+            return ("OpenAI's temporary request/token rate limit persisted after waiting and retrying. "
+                    "This is not a billing rejection. Please wait briefly before trying again.")
         if status in (400, 403, 404):
             return "OpenAI rejected the configured model or request. Check model access and the backend error log."
         return "The OpenAI generation request failed or returned no usable response. Check the backend error log."
@@ -148,7 +158,7 @@ def _tailoring_failure_detail(exc: Exception) -> str:
         if isinstance(item, (FinalizedValidationError, PayloadFormatError)):
             return "Generated CV validation failed: " + str(item)
     if any(isinstance(item, CVOverflowError) for item in chain):
-        return "Generated wording still exceeds one page after three shortening attempts."
+        return "Generated wording still exceeds one page in the fixed PDF layout after the repair budget was exhausted."
     # These messages originate in our structural validator, never in model prose.
     for item in reversed(chain):
         message = str(item)
@@ -206,6 +216,7 @@ async def _run_tailor(job: Job, cv: MasterCV, db: Session, *, allow_fallback: bo
                 return TailorCVResult(
                     keywords=[k.strip() for k in job.tailored_keywords.split(",") if k.strip()],
                     text=job.tailored_cv, cacheable=False, used_fallback=True,
+                    warning=f"{_tailoring_failure_detail(exc)} No new resume was generated; your saved resume is unchanged. Error reference: {error_id}.",
                 )
         raise HTTPException(
             status_code=502,
@@ -232,7 +243,10 @@ async def tailor_job(job_id: int, db: Session = Depends(get_db)):
     cv = _get_master_cv_or_400(db)
     result = await _run_tailor(job, cv, db, allow_fallback=True)
 
-    return TailorResult(job_id=job.id, keywords=result.keywords, tailored_cv=result.text)
+    return TailorResult(job_id=job.id, keywords=result.keywords, tailored_cv=result.text,
+                        used_fallback=result.used_fallback,
+                        warning=(result.warning or "New tailoring failed. Your previously saved resume is still available, but no new resume was generated."
+                                 if result.used_fallback else None))
 
 
 @router.patch("/{job_id}/toggle-applied", response_model=JobOut)

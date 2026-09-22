@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <title>Tailored Resume</title>
 <style>
-@page { size: 612.12pt 792.12pt; margin: 36pt;
-
-}
+@page { size: 612.12pt 792.12pt; margin: 36pt; }
 * { box-sizing: border-box; }
 body { width: 540pt; margin: 0; color: #000;
        font-family: Calibri, 'Segoe UI', Arial, sans-serif;
@@ -14,11 +12,11 @@ body { width: 540pt; margin: 0; color: #000;
 .cv-page { display: block; }
 header { margin-bottom: 29pt; }
 #header { margin: 0; font-size: 12.48pt !important; line-height: 15.3pt;
-          font-weight: bold; white-space: nowrap; letter-spacing: -0.08pt; }
+          font-weight: bold; white-space: nowrap; }
 .name { color: #000; }
 .header-tag { color: #0043ce; }
 .contact { margin-top: 1pt; font-size: 9.96pt; line-height: 12.24pt; white-space: nowrap; }
-h2 { margin: 0 0 5.04pt; font-size: 9.96pt !important;
+h2.section-title { margin: 0 0 5.04pt; padding: 0; font-size: 9.96pt !important;
      line-height: 12.24pt; font-weight: normal; color: #2f5496;
      text-transform: uppercase; break-after: avoid; }
 section + section { margin-top: 13.2pt; position: relative; padding-top: 8.28pt; }
@@ -33,7 +31,7 @@ li { position: relative; margin: 0 0 5.4pt; break-inside: avoid; overflow-wrap: 
 li::before { content: "\2022"; position: absolute; left: -18pt; font-family: Arial, sans-serif; line-height: 0; top: 6pt; }
 li:last-child { margin-bottom: 0; }
 .entry li { margin-bottom: 2.4pt; }
-.entry:first-of-type li:nth-child(-n+2) { line-height: 14.4pt; margin-bottom: 9.2pt; }
+.entry:first-of-type li:nth-child(-n+2) { line-height: 14.4pt; margin-bottom: 7.2pt; }
 footer { position: fixed; bottom: 0; width: 540pt; text-align: center; font: 9.96pt/12.24pt Cambria, Georgia, serif; color: #0043ce; }
 </style>
 </head>
@@ -43,21 +41,21 @@ footer { position: fixed; bottom: 0; width: 540pt; text-align: center; font: 9.9
 <div id="header"><span class="name">MUHAMMAD YUSUF</span><span class="header-tag"> | <span data-header-role>{{ role_title | upper }}</span> | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION</span></div>
 <p class="contact">A.S Computer Science &amp; Engineering | Bay Area, CA | rmyusufrehman@gmail.com | +1 (424) 305-8206 | <strong>Citizenship:</strong> United States</p>
 </header>
-<section><h2>Executive Summary</h2><p data-summary>{{ summary | inline }}</p></section>
-<section><h2>Core Skills</h2>
+<section><h2 class="section-title">Executive Summary</h2><p data-summary>{{ summary | inline }}</p></section>
+<section><h2 class="section-title">Core Skills</h2>
 <ul>{% for skill in core_skills %}<li class="skills-row" data-field="technical_expertise.{{ loop.index0 }}">{{ skill | labeled_row }}</li>{% endfor %}</ul>
 </section>
-<section><h2>Professional Experience</h2>
+<section><h2 class="section-title">Professional Experience</h2>
 {% for entry in experience %}<div class="entry">
 <p class="entry-heading">{{ entry.header_line | company_heading }}</p>
 <ul>{% for bullet in entry.standard_bullets %}<li data-field="experience_bullets.{{ entry.index }}.{{ loop.index0 }}">{{ bullet | inline }}</li>{% endfor %}
 {% if entry.project %}<li class="selected-project" data-field="experience_bullets.{{ entry.index }}.{{ entry.standard_bullets | length }}">{{ entry.project | project_row }}</li>{% endif %}</ul>
 </div>{% endfor %}
 </section>
-<section><h2>Education &amp; Certifications</h2>
+<section><h2 class="section-title">Education &amp; Certifications</h2>
 <ul>{% for line in education %}<li class="plain-row">{{ line | education_row }}</li>{% endfor %}</ul>
 </section>
-<section><h2>Additional Information</h2><ul>
+<section><h2 class="section-title">Additional Information</h2><ul>
 <li class="plain-row">{{ languages | labeled_row }}</li>
 <li class="plain-row"><strong>Work Authorization:</strong> United States Citizen (No sponsorship required)</li></ul>
 </section>

@@ -1,0 +1,59 @@
+INFO:     127.0.0.1:49793 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56401 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63990 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49757 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51911 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56401 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49757 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63990 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53357 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53357 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-21 11:41:38,961 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:41:39,020 WARNING app.services.tailor: Finalized CV attempt 1/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:41:43,163 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:41:43,190 WARNING app.services.tailor: Finalized CV attempt 2/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:41:48,560 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:41:48,564 WARNING app.services.tailor: Finalized CV attempt 3/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:41:52,608 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:41:52,612 WARNING app.services.tailor: Finalized CV attempt 4/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:41:56,792 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:41:56,815 WARNING app.services.tailor: Finalized CV attempt 5/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:42:01,058 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:01,080 WARNING app.services.tailor: Finalized CV attempt 6/12 rejected (FinalizedValidationError): Experience must have exactly four Arqon and three Ventera bullets.
+2026-09-21 11:42:04,923 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:04,992 WARNING app.services.tailor: Finalized CV attempt 7/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (summary, core_skills.0, experience_bullets.1.2)
+2026-09-21 11:42:07,074 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:07,081 WARNING app.services.tailor: Finalized CV attempt 8/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 23 words; required 25-30 words."], "summary": ["Returned 56 words; required 35-40 words."]}
+2026-09-21 11:42:09,468 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:09,479 WARNING app.services.tailor: Finalized CV attempt 9/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 22 words; required 25-30 words."], "summary": ["Returned 51 words; required 35-40 words."]}
+2026-09-21 11:42:10,754 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:10,777 WARNING app.services.tailor: Finalized CV attempt 10/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 23 words; required 25-30 words."], "summary": ["Returned 41 words; required 35-40 words."]}
+2026-09-21 11:42:12,717 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:12,739 WARNING app.services.tailor: Finalized CV attempt 11/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 22 words; required 25-30 words."], "summary": ["Returned 42 words; required 35-40 words."]}
+2026-09-21 11:42:14,541 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:42:14,566 WARNING app.services.tailor: Finalized CV attempt 12/12 rejected (FieldValidationError): Field repairs rejected: {"core_skills.0": ["Returned 23 words; required 25-30 words."]}
+2026-09-21 11:42:14,579 ERROR root: Tailoring failed for job 1259 [error 402f4e68c9c8]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 444, in _generate_with_repairs
+    raise FieldValidationError("Field repairs rejected: " + json.dumps(reasons), rejected)
+app.services.tailor.FieldValidationError: Field repairs rejected: {"core_skills.0": ["Returned 23 words; required 25-30 words."]}
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 176, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2953, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 423, in generate_tailored_result
+    return await _generate_with_repairs(raw_email, master, job_title, settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 468, in _generate_with_repairs
+    raise TailoringError(f"Finalized CV did not pass validation after {settings.tailoring_max_attempts} attempts. "
+app.services.cv_tailor.TailoringError: Finalized CV did not pass validation after 12 attempts. No invalid resume was accepted.
+2026-09-21 11:42:16,517 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:53357 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53357 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53357 - "GET /api/jobs HTTP/1.1" 200 OK

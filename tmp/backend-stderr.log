@@ -4,3 +4,4 @@ INFO:     Started reloader process [14004] using WatchFiles
 INFO:     Started server process [16720]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\services\cv_tailor.py', 'app\services\tailor.py', 'app\services\cv_fitting.py', 'app\services\cv_wording.py', 'app\services\pdf_generator.py'. Reloading...

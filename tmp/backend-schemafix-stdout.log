@@ -1,0 +1,77 @@
+INFO:     127.0.0.1:65521 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63344 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54399 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54665 - "OPTIONS /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56725 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63344 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56725 - "GET /api/cv HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63344 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54665 - "GET /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58097 - "OPTIONS /api/jobs/1259/tailor HTTP/1.1" 200 OK
+2026-09-21 11:50:48,166 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:50:48,298 WARNING app.services.tailor: Finalized CV attempt 1/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: AWS (summary, core_skills.0); Terraform (summary, core_skills.0, experience_bullets.0.0, experience_bullets.1.2); Jenkins (core_skills.1, experience_bullets.0.3); Ansible (core_skills.1, experience_bullets.0.2)
+2026-09-21 11:50:51,599 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:50:51,680 WARNING app.services.tailor: Finalized CV attempt 2/12 rejected (FinalizedValidationError): Technology claim is not supported by the Master CV: NIST
+2026-09-21 11:51:00,062 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:00,129 WARNING app.services.tailor: Finalized CV attempt 3/12 rejected (FinalizedValidationError): Compliance/framework claim is not supported by the Master CV: FedRAMP
+2026-09-21 11:51:04,083 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:04,133 WARNING app.services.tailor: Finalized CV attempt 4/12 rejected (DuplicateTechnologyError): Repeated technology; maximum 1 mention across editable fields: Terraform (summary, experience_bullets.1.2)
+2026-09-21 11:51:05,673 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:07,149 WARNING app.services.tailor: Finalized CV attempt 5/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:09,589 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:10,972 WARNING app.services.tailor: Finalized CV attempt 6/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:13,039 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:14,285 WARNING app.services.tailor: Finalized CV attempt 7/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:16,089 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:17,393 WARNING app.services.tailor: Finalized CV attempt 8/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:18,966 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:20,561 WARNING app.services.tailor: Finalized CV attempt 9/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:22,186 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:23,634 WARNING app.services.tailor: Finalized CV attempt 10/12 rejected (CVOverflowError): CV exceeds the fixed one-page template. Shorten the summary or bullets and retry.
+2026-09-21 11:51:25,915 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:27,395 WARNING app.services.tailor: Finalized CV attempt 11/12 rejected (CVOverflowError): CV exceeds the one-page content budget reserved above the footer.
+2026-09-21 11:51:28,819 INFO httpx2: HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2026-09-21 11:51:30,066 WARNING app.services.tailor: Finalized CV attempt 12/12 rejected (CVOverflowError): CV exceeds the one-page content budget reserved above the footer.
+2026-09-21 11:51:30,088 ERROR root: Tailoring failed for job 1259 [error d9f6fd425620]
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 454, in _generate_with_repairs
+    pdf = await asyncio.to_thread(build_ats_pdf, context)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\pdf_generator.py", line 152, in build_ats_pdf
+    pdf, measurements = runner.run(_render_pdf(html))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python312\Lib\asyncio\base_events.py", line 664, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\pdf_generator.py", line 228, in _render_pdf
+    raise CVOverflowError("CV exceeds the one-page content budget reserved above the footer.",
+app.services.pdf_generator.CVOverflowError: CV exceeds the one-page content budget reserved above the footer.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Yusuf\smashapply\backend\app\routers\jobs.py", line 176, in _run_tailor
+    result = candidate or await tailor_cv(
+                          ^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\cv_tailor.py", line 2964, in tailor_cv
+    result, _ = await generate_tailored_result(job_description_text, master_cv, job_title)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 423, in generate_tailored_result
+    return await _generate_with_repairs(raw_email, master, job_title, settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Yusuf\smashapply\backend\app\services\tailor.py", line 468, in _generate_with_repairs
+    raise TailoringError(f"Finalized CV did not pass validation after {settings.tailoring_max_attempts} attempts. "
+app.services.cv_tailor.TailoringError: Finalized CV did not pass validation after 12 attempts. No invalid resume was accepted.
+2026-09-21 11:51:31,813 WARNING root: Returning the previously completed CV for job 1259 after refresh failed
+INFO:     127.0.0.1:58097 - "POST /api/jobs/1259/tailor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58097 - "OPTIONS /api/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58097 - "GET /api/jobs HTTP/1.1" 200 OK

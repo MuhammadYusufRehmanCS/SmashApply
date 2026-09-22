@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_OPENAI_MODEL = "gpt-4o"
@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     # OpenAI LLM for CV tailoring
     openai_api_key: str = ""
     openai_model: str = DEFAULT_OPENAI_MODEL
+    tailoring_max_attempts: int = Field(default=12, ge=1, le=30)
+    tailoring_timeout_seconds: int = Field(default=600, ge=1, le=1800)
 
     # Database
     database_url: str = "sqlite:///./data/smashapply.db"

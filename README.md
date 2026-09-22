@@ -169,36 +169,62 @@ a Certifications line, and Languages. The renderer preserves these source facts,
 removes education dates, restores the approved fixed header banner, and fixes work authorization
 to `United States Citizen (No sponsorship required)`.
 
-Generation requires a maximum 25-word, two-physical-line summary; exactly three
+Generation requires a maximum 40-word, three-physical-line summary; exactly three
 Core Skills bullets (leadership/collaboration last); four Arqon and three Ventera
 bullets with the prescribed final project prefixes. The model is instructed not to
 repeat claims. Local checks reject exact/near-duplicate prose, repeated percentage
 metrics, and repeated technology names/aliases across editable text, including
 a shared technology/alias vocabulary. Arbitrary semantic paraphrases are not guaranteed
 to be detected by those local heuristics. Immutable certification names are preserved.
-No ATS-density repetition exception is currently enabled.
+Tools are strictly single-use across editable fields, including the role title.
+Aliases share the same identity. JD relevance and ATS density do not create an
+exception. Duplicate rejections give the model exact field paths and prioritize
+retaining the Selected Project mention. Immutable banners/certifications are excluded.
+Repeated accomplishments remain prohibited. Technical scope and metric expansion is enabled.
 
 Every PDF entrypoint uses the same `finalized_cv.html` shell (`cv_template.html`
 is only a compatibility include). It uses US Letter with half-inch margins,
-Calibri/Segoe UI/Arial, a uniform 12.48pt header and 9.96pt body/section headings.
-Header tags use bright blue `#0043ce`, section titles `#2f5496`, and employer
-headings `#1f3763`. Thin gray rules precede sections and the second employer.
-The two-line header keeps the supplied identity/contact details. Python limits
-the role suffix to four words and 32 characters; fonts never shrink. Content
-flows naturally without stretching sections to fill the page. Overflow is rejected.
+The attached reference controls typography: Calibri 9.96pt body and section
+headings, a uniform 12.48pt name/role/banner, blue section titles (#2f5496),
+bright blue header tags and dark blue employer headings. Thin gray dividers
+appear before sections and the second employer. Normal paragraph flow uses
+hanging bullets and no stretched page gaps. Employer pipe separators are preserved.
+A failed regeneration returns an explicit fallback warning; the UI does not
+automatically download the saved resume as though it were a new tailored result.
+
+Generation targets 20-25 summary words, 25-30 words per Core Skills category,
+and 28-35 words per experience bullet. Local validation rejects underfilled
+fields and copied/minimally edited experience before accepting a generated CV.
+Prompts allow JD-driven workstreams, tools, frameworks and quantified outcomes beyond the master.
 
 Core Skills, experience, education and additional information use consistent
 hanging bullets. Only the Selected Project label is bold, followed by the existing
 project wording. The renderer retains the existing structural validation. The LLM
 supplies JSON text only; all layout, colors, identity and HTML are application-owned.
 
-Both workflows share grounded generation and validation. Prompts prioritize exact
-JD terminology where supported by verified source achievements. New tool/framework
-claims and numeric values absent from the master are rejected; broader semantic
-factuality still needs human review. `core_skills` has `minItems = maxItems = 3`;
+Both workflows share scope-expanding generation and structural validation. Prompts prioritize exact
+JD terminology and senior ownership. Tools, standards and numbers are not checked for
+membership in the master. Employers, dates and credentials remain immutable.
+`core_skills` has `minItems = maxItems = 3`;
 `technical_expertise` is accepted for backward compatibility. Summary remains capped
-at 25 words/two physical lines, Core Skills rows at 28 words, general experience at
-30 words, and projects at 35. Invalid output receives at most two wording revisions.
+at 25 words/two physical lines, Core Skills rows at 30 words, all experience bullets at
+35 words (target 28-35 words, roughly two lines). Invalid output enters a targeted field-repair loop. Valid fields remain unchanged;
+all structure, duplication, word-budget and physical-page checks still run.
+`TAILORING_MAX_ATTEMPTS` defaults to 12 total model calls (maximum 30), and
+`TAILORING_TIMEOUT_SECONDS` defaults to 600 seconds. The first limit reached stops
+processing without saving invalid content; API authentication/connection failures stop immediately.
+Duplicate repairs forbid tools assigned to other fields; density repairs expand only
+underfilled fields. Measured overflow repairs reclaim only the needed rendered
+lines, preserving three-line experience bullets where space permits. Character
+estimates guide rewriting; the unchanged PDF renderer enforces actual page fit,
+while word ranges, prefixes and deduplication remain mandatory.
+Temporary OpenAI 429 rate limits honor Retry-After (or the provider's requested
+wait) and use bounded backoff. The finalized request shares at most three extra
+rate-limit retries across generation and repairs, within the same wall-clock deadline.
+Insufficient quota is never retried and receives a separate billing/quota message.
+Rejected field repairs include exact word/character counts, forbidden terms and
+the last rejected text in the next correction request.
+These bounds prevent indefinite API spend. No padding or fabricated workstreams are allowed.
 
 The inspected file was `smesh_cloudeng.pdf`; `smesh_cloudeng_5.pdf` was not available.
 The explicit current design rules take precedence over differences in that PDF
