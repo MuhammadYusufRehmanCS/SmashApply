@@ -143,6 +143,199 @@ def _duplicate_repairs(payload):
     return repairs
 
 
+# Tool-free stand-ins for repeated mentions that are not list items, so prose
+# stays grammatical. None of these may contain a TECHNOLOGIES name or alias.
+GENERIC_TERMS = {
+    "AWS": "cloud", "Azure": "cloud", "GCP": "cloud", "Kubernetes": "orchestration",
+    "Terraform": "infrastructure-as-code", "Docker": "container", "Jenkins": "CI/CD",
+    "Ansible": "configuration-management", "Python": "scripting", "Bash": "shell",
+    "Helm": "packaging", "GitHub Actions": "CI/CD", "SonarQube": "code-quality",
+    "FluxCD": "GitOps", "ArgoCD": "GitOps", "ECR": "registry", "ACR": "registry",
+    "GitLab": "source-control", "Prometheus": "metrics", "Grafana": "dashboard",
+    "PowerShell": "scripting", "SQL": "database", "Linux": "server",
+    "Snowflake": "warehouse", "Databricks": "analytics", "Kafka": "streaming",
+    "Airflow": "orchestration", "Splunk": "logging", "Sentinel": "SIEM",
+    "SOC 2": "compliance", "ISO 27001": "compliance", "NIST": "compliance",
+    "HIPAA": "compliance", "PCI DSS": "compliance",
+}
+_LEADING_SEP = re.compile(r"(?:,\s*(?:and|or)\s+|\s+(?:and|or|&)\s+|,\s*|\s*/\s*)$", re.I)
+_TRAILING_SEP = re.compile(r"^(?:\s*,\s*|\s+(?:and|or|&)\s+|\s*/\s*)", re.I)
+
+
+def _drop_mention(text, start, end, generic, *, title=False):
+    """Remove one mention at [start, end) without leaving broken prose."""
+    if text[max(0, start - 2):start] == "**" and text[end:end + 2] == "**":
+        start, end = start - 2, end + 2
+    head, tail = text[:start], text[end:]
+    if (lead := _LEADING_SEP.search(head)) and re.search(r"\w", head[:lead.start()][-1:] or ""):
+        head = head[:lead.start()]
+        if re.search(r"\b(?:and|or|&)\b", lead.group(0), re.I):
+            # "A, B and X" -> "A and B": move the conjunction onto the new last item.
+            comma = head.rfind(", ")
+            if comma >= 0 and not re.search(r"[.;:()]", head[comma:]) and len(head[comma:].split()) <= 4:
+                head = head[:comma] + " " + lead.group(0).strip(" ,") + " " + head[comma + 2:]
+    elif (trail := _TRAILING_SEP.match(tail)) and re.match(r"\s*\w", tail[trail.end():]):
+        tail = tail[trail.end():]
+    elif head.endswith("(") and tail.startswith(")"):
+        head, tail = head[:-1].rstrip(), tail[1:]
+    elif title:
+        pass
+    else:
+        if generic[0] in "aeiou" and re.search(r"\ba $", head, re.I):
+            head = head[:-2] + head[-2] + "n "
+        elif generic[0] not in "aeiou" and re.search(r"\ban $", head, re.I):
+            head = head[:-3] + head[-3] + " "
+        head += generic if head.strip() else generic[:1].upper() + generic[1:]
+    text = re.sub(r"\s{2,}", " ", head + tail)
+    text = re.sub(r"\s+([,.;:)])", r"\1", text).replace("()", "")
+    return re.sub(r"(:|^)\s*[,/]\s*", r"\1 ", text).strip()
+
+
+def dedupe_technologies(payload):
+    """Keep each technology once, in the field validation prefers, and scrub the rest.
+
+    LLMs routinely repeat a tool across fields despite the one-mention rule;
+    fixing that locally is cheaper and more reliable than another model call.
+    """
+    fields = _editable_fields(payload)
+    for repair in _duplicate_repairs(payload):
+        aliases = TECHNOLOGIES[repair["technology"]]
+        generic = GENERIC_TERMS.get(repair["technology"], "tooling")
+        for path in repair["occurrences"]:
+            text = fields[path]
+            matches = _mentions(text, aliases)
+            # Right to left so earlier offsets stay valid.
+            for match in reversed(matches[1:] if path == repair["keep_in"] else matches):
+                text = _drop_mention(text, match.start(), match.end(), generic, title=path == "role_title")
+            fields[path] = text
+    if not fields["role_title"].strip():
+        fields["role_title"] = payload.role_title
+    return _with_fields(payload, fields)
+
+
+def _with_fields(payload, fields):
+    groups = [list(group) for group in payload.experience_bullets]
+    for path, text in fields.items():
+        if path.startswith("experience_bullets."):
+            _, i, j = path.split(".")
+            groups[int(i)][int(j)] = text
+    return payload.model_copy(update={
+        "role_title": fields["role_title"], "summary": fields["summary"],
+        "core_skills": [fields[f"core_skills.{i}"] for i in range(len(payload.core_skills))],
+        "experience_bullets": groups,
+    })
+
+
+def _word_range(path):
+    """Word budget per editable field; mirrors the SYSTEM_PROMPT ranges."""
+    return ((1, 4) if path == "role_title" else (20, 25) if path == "summary"
+            else (25, 30) if path.startswith("core_skills.") else (28, 35))
+
+
+# Tool-, metric- and claim-free tails for near-miss fields. Larger gaps than
+# MAX_PADDING_WORDS mean thin content, which goes to the model repair loop instead.
+PADDING_PHRASES = (
+    " for engineering and operations teams", ", supporting dependable business outcomes",
+    ", with clear stakeholder communication", " through documented, repeatable practices",
+    ", aligned with delivery priorities", " while maintaining operational stability",
+    " across production environments", " with accountable ownership", " consistently", " reliably",
+)
+MAX_PADDING_WORDS = 8
+_TAIL_STOPWORDS = {"a", "an", "the", "and", "or", "&", "with", "to", "for", "by", "of", "in", "on", "at",
+                   "into", "from", "via", "while", "through", "across", "including", "using", "as", "-"}
+_STRONG_CLAUSE_STARTS = {"while", "through", "across", "using", "including", "enabling", "ensuring",
+                         "supporting", "reducing", "improving", "making", "helping", "so", "which", "that"}
+_WEAK_CLAUSE_STARTS = {"and", "with", "by", "to", "for"}
+
+
+def _word_count(text):
+    return len(_clean(text).split())
+
+
+def _trim_words(text, high, low=0):
+    """Cut an over-budget field at its last clause boundary within the budget."""
+    if _word_count(text) <= high:
+        return text
+    tokens = text.split()
+
+    def strip_tail(head):
+        head = list(head)
+        while head and head[-1].lower().strip(",;*") in _TAIL_STOPWORDS:
+            head.pop()
+        return head
+
+    def boundary_rank(cut):
+        # Lower is cleaner: sentence end, strong clause, comma (may split a list), weak joiner.
+        last, following = tokens[cut - 1].rstrip("*"), tokens[cut].lower().strip("*,")
+        return (0 if last.endswith((".", ";")) else 1 if following in _STRONG_CLAUSE_STARTS
+                else 2 if last.endswith(",") else 3 if following in _WEAK_CLAUSE_STARTS else None)
+
+    kept = None
+    candidates = []
+    for cut in range(len(tokens) - 1, 0, -1):
+        head = tokens[:cut]
+        rank = boundary_rank(cut)
+        if rank is None or _word_count(" ".join(head)) > high:
+            continue
+        head = strip_tail(head)
+        if _word_count(" ".join(head)) >= low:
+            candidates.append((rank, -cut, head))
+    if candidates:
+        kept = min(candidates, key=lambda item: item[:2])[2]
+    if kept is None:  # No clean clause boundary: hard cut at the budget.
+        kept = tokens
+        while _word_count(" ".join(kept)) > high:
+            kept = kept[:-1]
+        kept = strip_tail(kept) or kept
+    result = " ".join(kept).rstrip(",;:-. ")
+    if result.count("**") % 2:
+        cut = result.rfind("**")
+        result = result[:cut] + result[cut + 2:]
+    return result + "." if text.rstrip().endswith(".") and not result.endswith(".") else result
+
+
+def _pad_words(text, low, high, used):
+    """Append neutral tails to a field a few words short of its minimum."""
+    count = _word_count(text)
+    if not text.strip() or count >= low or low - count > MAX_PADDING_WORDS:
+        return text
+    body = text.rstrip()
+    end = "." if body.endswith(".") else ""
+    body = body.rstrip(".")
+    while count < low:
+        options = [phrase for phrase in PADDING_PHRASES if _word_count(phrase.strip(" ,")) <= high - count
+                   and phrase.strip(" ,").casefold() not in body.casefold()]
+        if not options:
+            break
+        # Prefer phrases no other field used, so tails do not read as boilerplate.
+        phrase = max([p for p in options if p not in used] or options, key=lambda p: _word_count(p.strip(" ,")))
+        used.add(phrase)
+        body += phrase
+        count += _word_count(phrase.strip(" ,"))
+    return body + end
+
+
+def fit_word_counts(payload, *, pad=True):
+    """Trim (and optionally pad) each prose field into its word budget before validation.
+
+    Prompts cannot make a model hit exact word counts on one attempt; near
+    misses are corrected here instead of costing a repair request.
+    """
+    fields, used = _editable_fields(payload), set()
+    for path, text in fields.items():
+        if path == "role_title":  # short_role_title owns the title.
+            continue
+        low, high = _word_range(path)
+        text = _trim_words(text, high, low)
+        fields[path] = _pad_words(text, low, high, used) if pad else text
+    return _with_fields(payload, fields)
+
+
+def prepare_payload(payload, *, pad=True):
+    """Local, deterministic clean-up of model output: one mention per tool, then word budgets."""
+    return fit_word_counts(dedupe_technologies(payload), pad=pad)
+
+
 def _normalized_payload(payload):
     # The prompt permits Markdown emphasis. Labels and project separators are
     # structural text; typography must not make an otherwise valid JSON fail.
@@ -351,8 +544,7 @@ def _repair_plan(payload, error, previous=None):
         if path not in fields:
             continue
         text = fields[path]
-        low, high = ((1, 4) if path == "role_title" else (20, 25) if path == "summary"
-                     else (25, 30) if path.startswith("core_skills.") else (28, 35))
+        low, high = _word_range(path)
         project_paths = {'experience_bullets.0.3': PROJECTS[0], 'experience_bullets.1.2': PROJECTS[1]}
         prefix = text.partition(":")[0] + ":" if path.startswith("core_skills.") else project_paths.get(path, '')
         spec = dict(text=text, min_words=low, max_words=high, required_prefix=prefix,
@@ -383,6 +575,9 @@ def _apply_field_repairs(payload, replacements, plan):
     errors = []
     for path, spec in plan.items():
         value = replacements.get(path)
+        if isinstance(value, str) and value.strip() and "\n" not in value:
+            value = _pad_words(_trim_words(value, spec["max_words"], spec["min_words"]),
+                               spec["min_words"], spec["max_words"], set())
         reasons = []
         if not isinstance(value, str):
             reasons.append("Return a nonempty text string.")
@@ -456,6 +651,7 @@ async def _generate_with_repairs(raw_email, master, job_title, settings):
                 if payload is not None:
                     prompt += "\nPrevious candidate: " + payload.model_dump_json()
                 payload = await _request_tailored_payload(settings, prompt, system_prompt=RULEBOOK)
+            payload = prepare_payload(payload)
             context = _context(source, payload, master.raw_text, raw_email)
             _validate_active_rewrite(payload, master)
             pdf = await asyncio.to_thread(build_ats_pdf, context)

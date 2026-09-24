@@ -176,6 +176,49 @@ class FinalizedValidationTests(unittest.TestCase):
             tailor._validate(payload, master().raw_text, 'AWS')
         self.assertEqual(caught.exception.repairs[0]['occurrences']['core_skills.0'], 2)
 
+    def test_duplicate_tools_are_deduped_locally_before_validation(self):
+        payload = candidate()
+        payload.role_title = 'AWS Cloud Engineer'
+        payload.summary = 'Cloud engineer building reliable AWS services with Terraform automation.'
+        payload.core_skills[0] = 'Cloud Architecture: AWS, Amazon Web Services and Jenkins release design.'
+        with self.assertRaises(tailor.DuplicateTechnologyError):
+            tailor._validate(payload)
+        deduped = tailor.dedupe_technologies(payload)
+        tailor._validate(deduped)
+        self.assertEqual(deduped.role_title, 'Cloud Engineer')
+        # Core Skills outranks the summary, so AWS stays there once.
+        self.assertEqual(deduped.summary,
+                         'Cloud engineer building reliable cloud services with infrastructure-as-code automation.')
+        self.assertEqual(deduped.core_skills[0], 'Cloud Architecture: AWS release design.')
+        # The Selected Project keeps its concrete tool evidence.
+        self.assertIn('Terraform', deduped.experience_bullets[1][2])
+        self.assertIn('Jenkins', deduped.experience_bullets[0][3])
+        self.assertEqual(tailor.dedupe_technologies(candidate()), candidate())
+
+    def test_near_miss_word_counts_are_fitted_locally(self):
+        payload = rewritten_candidate()
+        payload.core_skills[1] = ('Delivery Engineering: Support release governance and production readiness '
+                                  'through repeatable delivery workflows, automated verification and coordinated change practices.')
+        payload.experience_bullets[0][0] = payload.experience_bullets[0][0].rstrip('.') + (
+            ' while coordinating with platform, security and product teams on every release.')
+        with self.assertRaisesRegex(tailor.FinalizedValidationError, 'word budget'):
+            tailor._validate(payload)
+        fitted = tailor.prepare_payload(payload)
+        tailor._validate(fitted)
+        tailor._validate_active_rewrite(fitted, master())
+        self.assertTrue(25 <= tailor._word_count(fitted.core_skills[1]) <= 30)
+        self.assertTrue(fitted.core_skills[1].startswith('Delivery Engineering: Support release governance'))
+        self.assertTrue(28 <= tailor._word_count(fitted.experience_bullets[0][0]) <= 35)
+        # Cut at the clause boundary, not inside the trailing list.
+        self.assertTrue(fitted.experience_bullets[0][0].endswith('used by delivery teams.'))
+        # Fields already in budget are untouched.
+        self.assertEqual(fitted.summary, payload.summary)
+        self.assertEqual(fitted.experience_bullets[1], payload.experience_bullets[1])
+
+    def test_padding_is_capped_so_thin_fields_still_need_repair(self):
+        short = 'Cloud engineer supporting reliable operations.'
+        self.assertEqual(tailor._pad_words(short, 20, 25, set()), short)
+
     def test_partial_repairs_preserve_valid_edits_and_untouched_experience(self):
         payload = rewritten_candidate()
         error = tailor.FieldValidationError('repair needed', ['summary', 'core_skills.0'])
@@ -366,6 +409,13 @@ class FinalizedValidationTests(unittest.TestCase):
 
 
 class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Production defaults to one attempt; these tests exercise the repair loop itself.
+        settings = tailor.get_settings().model_copy(update={"tailoring_max_attempts": 12})
+        patcher = patch.object(tailor, 'get_settings', return_value=settings)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def test_expanded_metric_does_not_trigger_source_membership_repair(self):
         good = rewritten_candidate()
         bad = good.model_copy(deep=True)
@@ -416,7 +466,8 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
             generate.assert_awaited_once()
     async def test_jd_title_and_rulebook_reach_model_and_corrected_candidate_is_validated(self):
         invalid = rewritten_candidate()
-        invalid.summary = 'word ' * 41
+        # Too short to pad locally, so it still needs a model repair.
+        invalid.summary = 'Cloud engineer supporting reliable operations.'
         with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
                 patch.object(tailor, 'request_field_repairs', new=AsyncMock(
                     return_value={'summary': rewritten_candidate().summary})) as repair, \
@@ -429,24 +480,20 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(repair.call_args.args[1]), {'summary'})
         render.assert_called_once()
 
-    async def test_duplicate_retry_repairs_only_failing_field_and_keeps_rules(self):
+    async def test_duplicate_tools_are_fixed_locally_without_repair_calls(self):
         invalid = rewritten_candidate()
         invalid.core_skills[0] += ' Terraform.'
-        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
-                patch.object(tailor, 'request_field_repairs', new=AsyncMock(
-                    return_value={'core_skills.0': rewritten_candidate().core_skills[0]})) as repair, \
-                patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF') as render:
+        with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request,                 patch.object(tailor, 'request_field_repairs', new=AsyncMock()) as repair,                 patch.object(tailor, 'build_ats_pdf', return_value=b'%PDF') as render:
             await tailor.generate_tailored_resume('Terraform engineering', master(), 'Cloud Engineer')
         self.assertEqual(request.await_count, 1)
-        plan = repair.call_args.args[1]
-        self.assertEqual(set(plan), {'core_skills.0'})
-        self.assertIn('Terraform', plan['core_skills.0']['forbidden_terms'])
-        self.assertEqual(plan['core_skills.0']['min_words'], 25)
-        self.assertEqual(render.call_args.args[0]['experience'][1]['bullets'], invalid.experience_bullets[1])
+        repair.assert_not_awaited()
+        context = render.call_args.args[0]
+        self.assertNotIn('Terraform', context['core_skills'][0])
+        self.assertEqual(context['experience'][1]['bullets'], invalid.experience_bullets[1])
 
     async def test_repair_continues_past_three_attempts_without_regenerating_good_fields(self):
         invalid = rewritten_candidate()
-        invalid.core_skills[0] += ' Terraform.'
+        invalid.core_skills[0] = 'Cloud Architecture: Reliable service design.'
         responses = [{'core_skills.0': invalid.core_skills[0]}] * 3 + [
             {'core_skills.0': rewritten_candidate().core_skills[0]}]
         with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
@@ -460,7 +507,7 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_patch_retries_same_fields_without_losing_candidate(self):
         invalid = rewritten_candidate()
-        invalid.core_skills[0] += ' Terraform.'
+        invalid.core_skills[0] = 'Cloud Architecture: Reliable service design.'
         with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=invalid)) as request, \
                 patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=[
                     tailor.PayloadFormatError('Invalid patch JSON'),

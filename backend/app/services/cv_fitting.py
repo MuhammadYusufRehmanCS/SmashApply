@@ -158,6 +158,8 @@ async def fit_tailored_cv(result, master, title, company, description):
                 payload = _TailoredPayload.model_validate(current)
             else:
                 payload = await _request_tailored_payload(settings, request)
+            from app.services.tailor import prepare_payload
+            payload = prepare_payload(payload, pad=False)
             _validate_tailored_payload(payload, summary_required, experience, skills,
                                        reject_unchanged_categories=False)
             result = _result_from_payload(sections, payload, cacheable=True, target_job_title=title)

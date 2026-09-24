@@ -67,13 +67,28 @@ class CvTailorTests(unittest.TestCase):
         self.assertEqual(summary, "Cloud Engineer aligning AWS, Terraform, and CI/CD delivery.")
 
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
-        self.assertIn("Every bullet MUST", SYSTEM_PROMPT)
-        self.assertIn("source-number membership is not a restriction", SYSTEM_PROMPT)
+        self.assertIn("Rewrite every bullet", SYSTEM_PROMPT)
         self.assertIn("Arqon Consulting = EXACTLY 4 bullets", SYSTEM_PROMPT)
+        self.assertIn("Ventera Group = EXACTLY 3 bullets", SYSTEM_PROMPT)
 
-    def test_system_prompt_requires_readable_keyword_use(self):
-        self.assertIn("ACTIVE SCOPE EXPANSION", SYSTEM_PROMPT)
-        self.assertIn("recruiter-readable sentences", SYSTEM_PROMPT)
+    def test_system_prompt_requires_jd_keywords_action_verbs_and_no_durations(self):
+        self.assertIn("Reuse that exact JD wording", SYSTEM_PROMPT)
+        self.assertIn("strong past-tense action verb", SYSTEM_PROMPT)
+        self.assertIn("Never mention years of experience", SYSTEM_PROMPT)
+        self.assertIn("no HTML tags", SYSTEM_PROMPT)
+        self.assertIn("mention each specific keyword EXACTLY ONCE", SYSTEM_PROMPT)
+
+    def test_prompt_and_schema_allow_one_tool_mention_in_skills_or_experience(self):
+        from app.services.cv_schema import finalized_schema
+        self.assertTrue(SYSTEM_PROMPT.startswith("STRICT HARD CONSTRAINT (ONE MENTION PER TOOL)"))
+        self.assertIn("Maximum 1 total mention per tool across all fields", SYSTEM_PROMPT)
+        self.assertIn("STRATEGIC DISTRIBUTION", SYSTEM_PROMPT)
+        props = finalized_schema()["properties"]
+        experience = props["experience_bullets"]["properties"]
+        for prop in (props["core_skills"]["items"], experience["arqon"]["items"], experience["ventera"]["items"]):
+            self.assertIn("at most once in the whole document", prop["description"])
+        for prop in (props["summary"], props["role_title"]):
+            self.assertIn("Name no specific tools", prop["description"])
 
     def test_rewrite_does_not_stack_aligned_language_keywords(self):
         rewritten = _rewrite_experience_bullet(
@@ -365,7 +380,8 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         for entry in _split_experience_entries(self.sections[2]['content']):
             for bullet in entry['bullets']:
                 self.assertIn(bullet, data['experience_requirements'][0]['verified_bullets'])
-        self.assertEqual(request['temperature'], 0.7)
+        self.assertEqual(request['temperature'], 0.1)
+        self.assertTrue(request['response_format']['json_schema']['strict'])
         self.assertEqual(result.template_data['experience_bullets'], payload.experience_bullets)
 
     async def test_api_receives_category_context_and_requested_temperature(self):
@@ -381,7 +397,7 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
             factory.return_value.__aenter__.return_value = client
             await _request_tailored_payload(SimpleNamespace(openai_api_key='test', openai_model='gpt-4o'), prompt)
         args = client.chat.completions.create.await_args.kwargs
-        self.assertEqual(args['temperature'], 0.7)
+        self.assertEqual(args['temperature'], 0.1)
         self.assertEqual(json.loads(args["messages"][1]["content"])["verified_master_cv"], sections)
 
     def test_long_new_workstreams_survive_rendering_without_content_checks(self):
@@ -441,14 +457,46 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.await_count, 1)
         self.assertIn(weak.experience_bullets[0][0], result.text)
 
-    async def test_failed_retries_do_not_fabricate_python_rewrites(self):
-        for failure in [TailoringError("invalid JSON"), LLMExecutionError("API unavailable")]:
-            with self.subTest(failure=type(failure).__name__), \
-                 patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
-                request.side_effect = failure
-                with self.assertRaises(TailoringError):
-                    await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
-                self.assertEqual(request.await_count, 1 if isinstance(failure, LLMExecutionError) else 2)
+    async def test_api_failure_raises_after_one_call(self):
+        with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request:
+            request.side_effect = LLMExecutionError("API unavailable")
+            with self.assertRaises(LLMExecutionError):
+                await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations", allow_fallback=True)
+        self.assertEqual(request.await_count, 1)
+
+    async def test_invalid_json_falls_back_to_master_without_retry(self):
+        for content in ("not json", '{"summary": "Only a summary."}', "[]", ""):
+            client = AsyncMock()
+            client.chat.completions.create.return_value = SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+            with self.subTest(content=content), patch("app.services.cv_tailor.AsyncOpenAI") as factory, \
+                 patch("app.services.cv_tailor.get_settings",
+                       return_value=SimpleNamespace(openai_api_key="test", openai_model="gpt-4o")):
+                factory.return_value.__aenter__.return_value = client
+                result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations")
+                self.assertEqual(client.chat.completions.create.await_count, 1)
+                self.assertTrue(result.used_fallback)
+                self.assertFalse(result.cacheable)
+                for bullet in _split_experience_entries(self.sections[2]["content"])[0]["bullets"]:
+                    self.assertIn(bullet, result.text)
+
+    async def test_missing_key_uses_master_value_and_strips_html_and_durations(self):
+        data = self.payload().model_dump(exclude={"experience_bullets"})
+        data["summary"] = "<b>Cloud engineer</b> with 5+ years of experience in reliable operations."
+        client = AsyncMock()
+        client.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(data)))])
+        master = _TailoredPayload.model_construct(role_title="", keywords=[], summary="Master summary.",
+                                                  core_skills=[], experience_bullets=[["Master bullet."]])
+        with patch("app.services.cv_tailor.AsyncOpenAI") as factory:
+            factory.return_value.__aenter__.return_value = client
+            payload = await _request_tailored_payload(
+                SimpleNamespace(openai_api_key="test", openai_model="gpt-4o"), "Prompt", fallback=master)
+        self.assertEqual(client.chat.completions.create.await_count, 1)
+        self.assertEqual(payload.experience_bullets, [["Master bullet."]])
+        self.assertNotIn("<b>", payload.summary)
+        self.assertNotIn("years", payload.summary)
+        self.assertIn("Cloud engineer", payload.summary)
 
     async def test_tailor_route_requests_fallback_on_retry_failure(self):
         job = type("Job", (), {"id": 1, "title": "Systems Engineer", "company": "Acme", "description": "Service operations"})()
@@ -470,9 +518,10 @@ class CvTailorRetryTests(unittest.IsolatedAsyncioTestCase):
         with patch("app.services.cv_tailor._request_tailored_payload", new_callable=AsyncMock) as request, \
              patch("app.services.cv_tailor._keywords_from_text", return_value=[]):
             request.return_value = weak
-            with self.assertRaises(TailoringError):
-                await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations")
-        self.assertEqual(request.await_count, 2)
+            result = await tailor_cv(self.master, "Systems Engineer", "Acme", "Service operations")
+        self.assertEqual(request.await_count, 1)
+        self.assertTrue(result.used_fallback)
+        self.assertFalse(result.cacheable)
 
     def test_cache_validation_checks_structure_not_wording(self):
         text = _reconstruct_tailored_text(self.sections, self.payload())

@@ -22,7 +22,9 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
             factory.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await _request_tailored_payload(Settings(_env_file=None, openai_api_key='test'), 'Test', system_prompt='Rules')
         self.assertEqual(result.model_dump(), original.model_dump())
-        schema = client.chat.completions.create.call_args.kwargs['response_format']['json_schema']['schema']['properties']
+        request = client.chat.completions.create.call_args.kwargs
+        self.assertTrue(request['response_format']['json_schema']['strict'])
+        schema = request['response_format']['json_schema']['schema']['properties']
         for name, count in (('arqon', 4), ('ventera', 3)):
             group = schema['experience_bullets']['properties'][name]
             self.assertEqual((group['minItems'], group['maxItems']), (count, count))
@@ -53,16 +55,15 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(request["response_format"]["type"], "json_schema")
                 self.assertTrue(request["response_format"]["json_schema"]["strict"])
                 schema = request["response_format"]["json_schema"]["schema"]
-                self.assertIn("role_title", schema["required"])
-                self.assertNotIn("header", schema["properties"])
-                self.assertNotIn("contact", schema["properties"])
+                self.assertEqual(schema["required"], ["role_title", "keywords", "summary",
+                                                      "core_skills", "experience_bullets"])
                 self.assertEqual(schema["properties"]["core_skills"]["minItems"], 3)
                 self.assertEqual(schema["properties"]["core_skills"]["maxItems"], 3)
                 if model in ("gpt-5.6-terra", "gpt-6-astra"):
                     self.assertEqual(request["reasoning_effort"], "medium")
                     self.assertNotIn("temperature", request)
                 else:
-                    self.assertEqual(request["temperature"], 0.7)
+                    self.assertEqual(request["temperature"], 0.1)
                     self.assertNotIn("reasoning_effort", request)
 
     async def test_invalid_payload_reports_field_without_private_input(self):
