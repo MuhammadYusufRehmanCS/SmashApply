@@ -37,9 +37,7 @@ class SkillsContractTests(unittest.TestCase):
             _validate_tailored_payload(payload, False, None, None)
 
     def test_prompt_has_three_item_roles_and_rejection_warning(self):
-        for requirement in ("EXACTLY 3 items", "Bullet 1 = Dynamic Domain Skill 1",
-                            "Bullet 2 = Dynamic Domain Skill 2",
-                            "Bullet 3 = Leadership & Cross-Functional Collaboration",
-                            "will trigger payload rejection"):
+        for requirement in ("EXACTLY 3 items", "Items 1 and 2 are dynamic domains",
+                            "Item 3 starts\n'Leadership & Cross-Functional Collaboration:'"):
             self.assertIn(requirement, SYSTEM_PROMPT)
         self.assertNotIn('"Category 4 items"', SYSTEM_PROMPT)

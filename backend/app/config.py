@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # OpenAI LLM for CV tailoring
     openai_api_key: str = ""
     openai_model: str = DEFAULT_OPENAI_MODEL
-    tailoring_max_attempts: int = Field(default=12, ge=1, le=30)
+    tailoring_max_attempts: int = Field(default=1, ge=1, le=30)
     tailoring_timeout_seconds: int = Field(default=600, ge=1, le=1800)
 
     # Database

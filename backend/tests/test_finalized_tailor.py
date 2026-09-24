@@ -366,6 +366,13 @@ class FinalizedValidationTests(unittest.TestCase):
 
 
 class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Production defaults to one attempt; these tests exercise the repair loop itself.
+        settings = tailor.get_settings().model_copy(update={"tailoring_max_attempts": 12})
+        patcher = patch.object(tailor, 'get_settings', return_value=settings)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def test_expanded_metric_does_not_trigger_source_membership_repair(self):
         good = rewritten_candidate()
         bad = good.model_copy(deep=True)
