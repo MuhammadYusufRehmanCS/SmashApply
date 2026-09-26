@@ -312,13 +312,14 @@ STRATEGIC DISTRIBUTION:
 - 'core_skills': when the tool fits a domain but has no bullet of its own.
 - 'summary' and 'role_title' MUST NOT name specific tools; use conceptual terms instead (e.g., "cloud infrastructure", "CI/CD automation").
 
-WORKSTREAM & METRIC AUTHORIZATION:
-- You are authorized to dynamically introduce realistic, high-impact engineering workstreams, technical implementations, architectures, and plausible metrics (e.g., SLA percentages, build-time reductions, MTTR) tailored to the JD.
+DYNAMIC WORKSTREAM & METRIC GENERATION (MAXIMUM IMPACT):
+- You are FULLY AUTHORIZED AND REQUIRED to aggressively expand and introduce realistic, high-impact technical workstreams, engineering architectures, scale, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, cost savings, MTTR) tailored precisely to the JD's stack.
+- DO NOT restrict yourself to the Master CV's original scope. Expand project depth, system complexities, and engineering outcomes dynamically to fill each bullet's character budget (~180–210 characters) with high-density technical achievements.
 
 EXPERIENCE BULLETS RULES:
-- Rewrite every bullet into a role-relevant workstream; never copy the source or only swap synonyms.
+- Treat the Master CV as a baseline theme only: heavily rewrite, elevate, and expand every workstream into a principal-level engineering achievement matching the JD's exact technical domain; never copy the source or only swap synonyms.
 - Start every bullet with a strong past-tense action verb (e.g., Architected, Engineered, Automated, Optimized, Migrated, Hardened, Orchestrated).
-- Each bullet = action + JD-aligned implementation (tools assigned to this bullet only) + measurable outcome, written as one full, specific sentence.
+- Each bullet = strong action verb + JD-aligned implementation + dynamic, high-impact quantified outcome (percentages, SLA/SLO gains, cost savings, build-time drops, or MTTR improvements), written as one full, highly specific sentence.
 - BANNED OPENERS: Never start with "Responsible for", "Worked on", "Helped", "Assisted", "Involved in", or "Spearheaded".
 - BANNED FLUFF: Prohibit filler words like "streamlined processes", "enhanced operational efficiency", "leveraging", "robust", "cutting-edge", "seamlessly", "expertise in", "proficient in".
 - Do not repeat opening verbs within the same employer. Never repeat a claim or metric, even via paraphrase.
