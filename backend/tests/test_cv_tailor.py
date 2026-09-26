@@ -68,8 +68,8 @@ class CvTailorTests(unittest.TestCase):
 
     def test_system_prompt_requires_every_bullet_and_fixed_counts(self):
         self.assertIn("Rewrite every bullet", SYSTEM_PROMPT)
-        self.assertIn("Arqon Consulting = EXACTLY 4 bullets", SYSTEM_PROMPT)
-        self.assertIn("Ventera Group = EXACTLY 3 bullets", SYSTEM_PROMPT)
+        self.assertIn("Array 0 (Arqon Consulting) = EXACTLY 4 bullets", SYSTEM_PROMPT)
+        self.assertIn("Array 1 (Ventera Group) = EXACTLY 3 bullets", SYSTEM_PROMPT)
 
     def test_system_prompt_requires_jd_keywords_action_verbs_and_no_durations(self):
         self.assertIn("Reuse that exact JD wording", SYSTEM_PROMPT)
@@ -80,7 +80,7 @@ class CvTailorTests(unittest.TestCase):
 
     def test_prompt_and_schema_allow_one_tool_mention_in_skills_or_experience(self):
         from app.services.cv_schema import finalized_schema
-        self.assertTrue(SYSTEM_PROMPT.startswith("STRICT HARD CONSTRAINT (ONE MENTION PER TOOL)"))
+        self.assertIn("STRICT HARD CONSTRAINT (ONE MENTION PER TOOL)", SYSTEM_PROMPT)
         self.assertIn("Maximum 1 total mention per tool across all fields", SYSTEM_PROMPT)
         self.assertIn("STRATEGIC DISTRIBUTION", SYSTEM_PROMPT)
         props = finalized_schema()["properties"]

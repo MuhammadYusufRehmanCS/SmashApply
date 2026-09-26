@@ -12,12 +12,13 @@ from difflib import SequenceMatcher
 from app.config import get_settings
 from app.models import MasterCV
 from app.services.cv_tailor import (
-    LLMExecutionError, PayloadFormatError, TailoringError, _request_tailored_payload,
+    LLMExecutionError, PayloadFormatError, TailoringError, _request_tailored_payload, _strip_meta_text,
     _split_experience_entries, SYSTEM_PROMPT, TailorCVResult, short_role_title,
 )
 from app.services.pdf_generator import CVOverflowError, build_ats_pdf
 from app.services.text_sections import strip_bullet
 from app.services.cv_repair import request_field_repairs
+from app.services.cv_schema import FIELD_LIMITS
 from app.services.openai_retry import rate_limit_retry_budget
 
 PROJECTS = (
@@ -227,9 +228,28 @@ def _with_fields(payload, fields):
 
 
 def _word_range(path):
-    """Word budget per editable field; mirrors the SYSTEM_PROMPT ranges."""
-    return ((1, 4) if path == "role_title" else (20, 25) if path == "summary"
-            else (25, 30) if path.startswith("core_skills.") else (28, 35))
+    """Guardrail word bounds per editable field (see FIELD_LIMITS)."""
+    return FIELD_LIMITS[path.split(".")[0]][:2]
+
+
+def _char_limit(path):
+    """Layout limit per editable field: characters, not words, decide line wraps."""
+    return FIELD_LIMITS[path.split(".")[0]][2]
+
+
+def _char_count(text):
+    return len(_clean(text))
+
+
+def _budget_text(path):
+    _, high = _word_range(path)
+    limit = _char_limit(path)
+    return f"at most {high} words" + (f" and {limit} characters" if limit is not None else "") + " each."
+
+
+def _over_budget(path, text):
+    limit = _char_limit(path)
+    return _word_count(text) > _word_range(path)[1] or (limit is not None and _char_count(text) > limit)
 
 
 # Tool-, metric- and claim-free tails for near-miss fields. Larger gaps than
@@ -252,11 +272,17 @@ def _word_count(text):
     return len(_clean(text).split())
 
 
-def _trim_words(text, high, low=0):
-    """Cut an over-budget field at its last clause boundary within the budget."""
-    if _word_count(text) <= high:
-        return text
+def _trim_to_budget(text, high, low=0, max_chars=None):
+    """Cut an over-budget field (words or characters) at its cleanest clause boundary."""
+    period = 1 if text.rstrip().endswith(".") else 0
+
+    def fits(tokens):
+        joined = " ".join(tokens)
+        return _word_count(joined) <= high and (max_chars is None or _char_count(joined.rstrip(".")) + period <= max_chars)
+
     tokens = text.split()
+    if fits(tokens):
+        return text
 
     def strip_tail(head):
         head = list(head)
@@ -275,7 +301,7 @@ def _trim_words(text, high, low=0):
     for cut in range(len(tokens) - 1, 0, -1):
         head = tokens[:cut]
         rank = boundary_rank(cut)
-        if rank is None or _word_count(" ".join(head)) > high:
+        if rank is None or not fits(head):
             continue
         head = strip_tail(head)
         if _word_count(" ".join(head)) >= low:
@@ -284,7 +310,7 @@ def _trim_words(text, high, low=0):
         kept = min(candidates, key=lambda item: item[:2])[2]
     if kept is None:  # No clean clause boundary: hard cut at the budget.
         kept = tokens
-        while _word_count(" ".join(kept)) > high:
+        while kept and not fits(kept):
             kept = kept[:-1]
         kept = strip_tail(kept) or kept
     result = " ".join(kept).rstrip(",;:-. ")
@@ -294,8 +320,8 @@ def _trim_words(text, high, low=0):
     return result + "." if text.rstrip().endswith(".") and not result.endswith(".") else result
 
 
-def _pad_words(text, low, high, used):
-    """Append neutral tails to a field a few words short of its minimum."""
+def _pad_words(text, low, high, used, max_chars=None):
+    """Append neutral tails to a field a few words short of its minimum, within its character cap."""
     count = _word_count(text)
     if not text.strip() or count >= low or low - count > MAX_PADDING_WORDS:
         return text
@@ -304,7 +330,8 @@ def _pad_words(text, low, high, used):
     body = body.rstrip(".")
     while count < low:
         options = [phrase for phrase in PADDING_PHRASES if _word_count(phrase.strip(" ,")) <= high - count
-                   and phrase.strip(" ,").casefold() not in body.casefold()]
+                   and phrase.strip(" ,").casefold() not in body.casefold()
+                   and (max_chars is None or _char_count(body + phrase + end) <= max_chars)]
         if not options:
             break
         # Prefer phrases no other field used, so tails do not read as boilerplate.
@@ -315,25 +342,30 @@ def _pad_words(text, low, high, used):
     return body + end
 
 
-def fit_word_counts(payload, *, pad=True):
-    """Trim (and optionally pad) each prose field into its word budget before validation.
+def _fit_field(path, text, used, *, pad=True):
+    low, high = _word_range(path)
+    limit = _char_limit(path)
+    text = _trim_to_budget(text, high, low, limit)
+    return _pad_words(text, low, high, used, limit) if pad else text
 
-    Prompts cannot make a model hit exact word counts on one attempt; near
-    misses are corrected here instead of costing a repair request.
+
+def fit_field_budgets(payload, *, pad=True):
+    """Trim (and optionally pad) each prose field into its character and word budget before validation.
+
+    Prompts cannot make a model hit exact lengths on one attempt; near misses
+    are corrected here instead of costing a repair request.
     """
     fields, used = _editable_fields(payload), set()
     for path, text in fields.items():
-        if path == "role_title":  # short_role_title owns the title.
-            continue
-        low, high = _word_range(path)
-        text = _trim_words(text, high, low)
-        fields[path] = _pad_words(text, low, high, used) if pad else text
+        if path != "role_title":  # short_role_title owns the title.
+            fields[path] = _fit_field(path, text, used, pad=pad)
     return _with_fields(payload, fields)
 
 
 def prepare_payload(payload, *, pad=True):
-    """Local, deterministic clean-up of model output: one mention per tool, then word budgets."""
-    return fit_word_counts(dedupe_technologies(payload), pad=pad)
+    """Local, deterministic clean-up of model output: meta-text, one mention per tool, then length budgets."""
+    fields = {path: _strip_meta_text(text) for path, text in _editable_fields(payload).items()}
+    return fit_field_budgets(dedupe_technologies(_with_fields(payload, fields)), pad=pad)
 
 
 def _normalized_payload(payload):
@@ -366,8 +398,9 @@ def _validate(payload, master_text: str | None = None, job_description: str = ""
     payload = _normalized_payload(payload)
     if not payload.role_title.strip() or len(payload.role_title.split()) > 4 or len(payload.role_title) > 32 or "\n" in payload.role_title:
         raise FinalizedValidationError("Role title must be 1-4 words and at most 32 characters on one line.")
-    if not 1 <= len(payload.summary.split()) <= 25 or "\n" in payload.summary:
-        raise FinalizedValidationError("Executive Summary must be one paragraph of at most 25 words.")
+    if not payload.summary.split() or "\n" in payload.summary or _over_budget("summary", payload.summary):
+        raise FieldValidationError("Executive Summary must be one paragraph within its length budget: "
+                                   + _budget_text("summary"), ["summary"])
     skills = payload.core_skills
     if len(skills) != 3 or any(":" not in s or not s.split(":", 1)[1].strip() for s in skills):
         raise FinalizedValidationError("Core Skills must contain exactly three labeled, nonempty bullets.")
@@ -375,8 +408,9 @@ def _validate(payload, master_text: str | None = None, job_description: str = ""
         raise FinalizedValidationError("Core Skills bullet 3 must cover Leadership & Cross-Functional Collaboration.")
     if skills[0].split(":", 1)[0].casefold() == skills[1].split(":", 1)[0].casefold():
         raise FinalizedValidationError("Core Skills domain labels must be distinct.")
-    if any(len(_clean(skill).split()) > 30 for skill in skills):
-        raise FinalizedValidationError("Core Skills bullets must be at most 30 words each.")
+    long_skills = [f"core_skills.{i}" for i, skill in enumerate(skills) if _over_budget(f"core_skills.{i}", skill)]
+    if long_skills:
+        raise FieldValidationError("Core Skills length budget exceeded: " + _budget_text("core_skills"), long_skills)
     groups = payload.experience_bullets
     if len(groups) != 2 or [len(g) for g in groups] != [4, 3]:
         raise FinalizedValidationError("Experience must have exactly four Arqon and three Ventera bullets.")
@@ -388,10 +422,11 @@ def _validate(payload, master_text: str | None = None, job_description: str = ""
                      if 'selected project:' in bullet.lower()]
         if misplaced:
             raise FieldValidationError("Selected Projects must occur only in the final employer bullet. Rewrite these as standard achievements without a project label.", misplaced)
-    for group in groups:
-        for index, bullet in enumerate(group):
-            if len(_clean(bullet).split()) > 35:
-                raise FinalizedValidationError("Experience word budget exceeded: all bullets at most 35 words.")
+    long_bullets = [f"experience_bullets.{i}.{j}" for i, group in enumerate(groups)
+                    for j, bullet in enumerate(group) if _over_budget(f"experience_bullets.{i}.{j}", bullet)]
+    if long_bullets:
+        raise FieldValidationError("Experience length budget exceeded: " + _budget_text("experience_bullets"),
+                                   long_bullets)
     prose = [payload.summary, *skills, *groups[0], *groups[1]]
     if any(not text.strip() or "\n" in text for text in prose):
         raise FinalizedValidationError("Every bullet must be nonempty, single-paragraph text.")
@@ -458,20 +493,19 @@ def _validate_active_rewrite(payload, master):
     if copied:
         raise FieldValidationError("Experience wording is unchanged or minimally edited: " +
                                        "; ".join(copied) + ". Rewrite the technical action and scope for the JD using role-aligned scope.", copied_paths)
+    # Word floors only catch degenerate output; the character caps govern layout.
     underfilled = []
     underfilled_paths = []
-    if len(_clean(payload.summary).split()) < 20:
-        underfilled.append("summary: target 20-25 words")
-        underfilled_paths.append("summary")
-    for index, skill in enumerate(payload.core_skills, 1):
-        if len(_clean(skill).split()) < 25:
-            underfilled.append(f"Core Skills {index}: target 25-30 words")
-            underfilled_paths.append(f"core_skills.{index - 1}")
-    for employer, bullets in enumerate(payload.experience_bullets, 1):
-        for index, bullet in enumerate(bullets, 1):
-            if len(_clean(bullet).split()) < 28:
-                underfilled.append(f"employer {employer} bullet {index}: target 28-35 words")
-                underfilled_paths.append(f"experience_bullets.{employer - 1}.{index - 1}")
+    labels = {"summary": "summary",
+              **{f"core_skills.{i}": f"Core Skills {i + 1}" for i in range(len(payload.core_skills))},
+              **{f"experience_bullets.{i}.{j}": f"employer {i + 1} bullet {j + 1}"
+                 for i, group in enumerate(payload.experience_bullets) for j in range(len(group))}}
+    fields = _editable_fields(payload)
+    for path, label in labels.items():
+        low, high = _word_range(path)
+        if _word_count(fields[path]) < low:
+            underfilled.append(f"{label}: target {low}-{high} words")
+            underfilled_paths.append(path)
     if underfilled:
         raise FieldValidationError("Insufficient technical detail: " + "; ".join(underfilled) +
                                        ". Expand with concrete role-aligned action, implementation and quantified impact.", underfilled_paths)
@@ -532,9 +566,8 @@ def _repair_plan(payload, error, previous=None):
             paths = set(fields) - {"role_title"}
     elif "Executive Summary" in str(error):
         paths.add("summary")
-    elif "word budget" in str(error) or "Core Skills bullets" in str(error):
-        paths.update(path for path, text in fields.items()
-                     if len(_clean(text).split()) > (30 if path.startswith("core_skills.") else 35))
+    elif not paths:
+        paths.update(path for path, text in fields.items() if path != "role_title" and _over_budget(path, text))
     # Assign each technology to its existing field, with concrete projects taking priority.
     owners = {r["technology"]: r["keep_in"] for r in _duplicate_repairs(payload)}
     for name, aliases in TECHNOLOGIES.items():
@@ -550,6 +583,8 @@ def _repair_plan(payload, error, previous=None):
         spec = dict(text=text, min_words=low, max_words=high, required_prefix=prefix,
                     forbidden_terms=[alias for name, aliases in TECHNOLOGIES.items()
                                      if owners[name] is not None and owners[name] != path for alias in aliases])
+        if _char_limit(path) is not None:
+            spec["max_characters"] = _char_limit(path)
         previous_spec = (previous or {}).get(path, {})
         if "last_rejection" in previous_spec:
             spec["last_rejection"] = previous_spec["last_rejection"]
@@ -557,15 +592,12 @@ def _repair_plan(payload, error, previous=None):
         cap = caps.get(path, old_cap)
         if cap is not None:
             spec["target_characters"] = cap
+        # Overflowing fields shrink by characters (target_characters), not by a forced word count.
         if path in line_targets:
             spec.update(line_targets[path])
-            # Choose the shortest permitted word count for an overflowing field.
-            # This is enforced in the generation schema, not left to prose advice.
-            spec['generation_word_count'] = spec['min_words']
         elif previous_spec.get('target_lines'):
             for key in ('rendered_lines', 'target_lines'):
                 spec[key] = previous_spec[key]
-            spec['generation_word_count'] = spec['min_words']
         plan[path] = spec
     return plan
 
@@ -576,14 +608,16 @@ def _apply_field_repairs(payload, replacements, plan):
     for path, spec in plan.items():
         value = replacements.get(path)
         if isinstance(value, str) and value.strip() and "\n" not in value:
-            value = _pad_words(_trim_words(value, spec["max_words"], spec["min_words"]),
-                               spec["min_words"], spec["max_words"], set())
+            value = _strip_meta_text(value)
+            limit = spec.get("max_characters")
+            value = _pad_words(_trim_to_budget(value, spec["max_words"], spec["min_words"], limit),
+                               spec["min_words"], spec["max_words"], set(), limit)
         reasons = []
         if not isinstance(value, str):
             reasons.append("Return a nonempty text string.")
         else:
-            words = len(_clean(value).split())
-            characters = len(value.replace("**", ""))
+            words = _word_count(value)
+            characters = _char_count(value)
             if "\n" in value:
                 reasons.append("Remove newlines; keep one paragraph.")
             if not spec["min_words"] <= words <= spec["max_words"]:

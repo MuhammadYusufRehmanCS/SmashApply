@@ -38,20 +38,21 @@ def candidate():
 def rewritten_candidate():
     payload = candidate()
     payload.summary = 'Cloud engineer delivering reliable infrastructure through automation, release engineering and service ownership, aligning technical execution with business needs and cross-team delivery priorities.'
+    # Within FIELD_LIMITS character caps so each field renders in two lines.
     payload.core_skills = [
-        'Cloud Architecture: Design resilient infrastructure and plan workload capacity around application needs, connecting service availability with reliable operations and consistent environment management for enterprise production systems.',
-        'Delivery Engineering: Support release governance and production readiness through repeatable delivery workflows, automated verification and coordinated change practices that connect software engineering with dependable operational outcomes.',
-        'Leadership & Cross-Functional Collaboration: Take technical ownership, coordinate engineering priorities and communicate operational requirements across teams, supporting shared delivery goals through clear accountability and practical collaboration.',
+        'Cloud Architecture: Design resilient infrastructure and plan workload capacity around application needs, linking service availability with reliable operations and consistent environments.',
+        'Delivery Engineering: Support release governance and production readiness through repeatable delivery workflows, automated verification and coordinated change practices for production.',
+        'Leadership & Cross-Functional Collaboration: Take technical ownership, coordinate engineering priorities and communicate operational needs across teams with clear accountability.',
     ]
     payload.experience_bullets = [[
-        "Engineered resilient production workloads through high-availability architecture, sustaining 99.9% uptime while aligning infrastructure design with service reliability needs and supporting dependable operations across the systems used by delivery teams.",
-        "Accelerated software delivery through GitHub Actions workflows and SonarQube quality gates, bringing deployment times below 60 seconds while integrating automated release checks into the engineering process for production changes.",
-        "Reduced recovery time by applying Ansible configuration management alongside Python and Bash maintenance scripts, making infrastructure operations repeatable and helping engineering teams restore dependable service through consistent system maintenance practices.",
-        "Selected Project: Release Automation System - Established Jenkins delivery pipelines with complete artifact traceability, connecting build outputs to release workflows so engineering teams could track the software delivered into production environments.",
+        "Engineered resilient production workloads through high-availability architecture, sustaining 99.9% uptime while aligning infrastructure design with service reliability needs.",
+        "Accelerated software delivery through GitHub Actions workflows and SonarQube quality gates, bringing deployment times below 60 seconds with automated release checks.",
+        "Reduced recovery time by applying Ansible configuration management alongside Python and Bash maintenance scripts, making routine infrastructure operations repeatable.",
+        "Selected Project: Release Automation System - Established Jenkins delivery pipelines with complete artifact traceability, linking build outputs to release workflows.",
     ], [
-        "Streamlined enterprise release delivery to improve deployment efficiency by 60%, reducing operational errors through repeatable delivery practices that helped teams coordinate software changes and maintain a dependable path into production systems.",
-        "Supported container service readiness in 10-30 seconds by configuring scalable ingress routing, connecting application delivery needs with runtime availability so engineering teams could bring deployed services online reliably and support production workloads.",
-        "Selected Project: Automated Infrastructure Provisioning - Established modular Terraform workflows for environment creation in 5-10 minutes, making infrastructure setup repeatable and helping delivery teams prepare consistent environments for their application deployment requirements.",
+        "Improved enterprise deployment efficiency by 60%, reducing operational errors through repeatable delivery practices that helped teams coordinate software changes safely.",
+        "Supported container service readiness in 10-30 seconds by configuring scalable ingress routing, so engineering teams could bring deployed services online reliably.",
+        "Selected Project: Automated Infrastructure Provisioning - Established modular Terraform workflows for environment creation in 5-10 minutes, making setup repeatable.",
     ]]
     return payload
 
@@ -114,15 +115,15 @@ class FinalizedValidationTests(unittest.TestCase):
         self.assertIn('Repeated technology', _tailoring_failure_detail(error))
         self.assertNotIn('after three attempts', _tailoring_failure_detail(error))
 
-    def test_expanded_word_budgets_render_within_full_page(self):
+    def test_character_budget_renders_within_full_page(self):
         payload = candidate()
         payload.summary = rewritten_candidate().summary
+        # Many short words are fine: the character cap, not the word count, governs layout.
         payload.experience_bullets[0][0] = (
-            'Designed and governed high-availability cloud architectures across multi-region environments, '
-            'ensuring 99.9% operational uptime for mission-critical enterprise production workloads '
-            'while aligning service reliability and infrastructure operations with business needs and delivery priorities.')
-        self.assertLessEqual(len(payload.summary.split()), 25)
-        self.assertGreater(len(payload.experience_bullets[0][0].split()), 30)
+            'Designed cloud systems in two regions, kept 99.9% uptime for key production workloads, and tied '
+            'service design to business needs so teams could ship on time with less risk.')
+        self.assertGreater(tailor._word_count(payload.experience_bullets[0][0]), 28)
+        self.assertLessEqual(tailor._char_count(payload.experience_bullets[0][0]), 215)
         context = tailor._context(tailor._source_context(master()), payload)
         with pdfplumber.open(io.BytesIO(build_ats_pdf(context))) as document:
             self.assertEqual(len(document.pages), 1)
@@ -132,9 +133,10 @@ class FinalizedValidationTests(unittest.TestCase):
             self.assertLessEqual(summary_end - summary_start - 1, 2)
             self.assertLess(lines[-2]['bottom'], 740)
             self.assertLess(lines[-2]['bottom'], lines[-1]['top'])
-        payload.experience_bullets[0][0] += ' extra word word word word word'
-        with self.assertRaisesRegex(TailoringError, '35'):
+        payload.experience_bullets[0][0] += ' Extended with enough additional wording to pass the cap.'
+        with self.assertRaisesRegex(TailoringError, '215 characters') as caught:
             tailor._validate(payload)
+        self.assertEqual(caught.exception.paths, ['experience_bullets.0.0'])
 
     def test_copied_bullets_rejected_and_rewritten_bullets_accepted(self):
         with self.assertRaisesRegex(tailor.FinalizedValidationError, 'unchanged'):
@@ -149,8 +151,8 @@ class FinalizedValidationTests(unittest.TestCase):
         payload.core_skills[0] = 'Cloud Architecture: Reliable service design.'
         with self.assertRaisesRegex(tailor.FinalizedValidationError, 'Insufficient technical detail') as caught:
             tailor._validate_active_rewrite(payload, master())
-        self.assertIn('summary: target 20-25', str(caught.exception))
-        self.assertIn('Core Skills 1: target 25-30', str(caught.exception))
+        self.assertIn('summary: target 14-25', str(caught.exception))
+        self.assertIn('Core Skills 1: target 16-30', str(caught.exception))
 
     def test_jd_required_tools_still_cannot_repeat(self):
         payload = candidate()
@@ -195,25 +197,36 @@ class FinalizedValidationTests(unittest.TestCase):
         self.assertIn('Jenkins', deduped.experience_bullets[0][3])
         self.assertEqual(tailor.dedupe_technologies(candidate()), candidate())
 
-    def test_near_miss_word_counts_are_fitted_locally(self):
+    def test_near_miss_lengths_are_fitted_locally(self):
         payload = rewritten_candidate()
         payload.core_skills[1] = ('Delivery Engineering: Support release governance and production readiness '
-                                  'through repeatable delivery workflows, automated verification and coordinated change practices.')
+                                  'through repeatable delivery workflows.')
         payload.experience_bullets[0][0] = payload.experience_bullets[0][0].rstrip('.') + (
             ' while coordinating with platform, security and product teams on every release.')
-        with self.assertRaisesRegex(tailor.FinalizedValidationError, 'word budget'):
+        with self.assertRaisesRegex(tailor.FinalizedValidationError, 'length budget'):
             tailor._validate(payload)
         fitted = tailor.prepare_payload(payload)
         tailor._validate(fitted)
         tailor._validate_active_rewrite(fitted, master())
-        self.assertTrue(25 <= tailor._word_count(fitted.core_skills[1]) <= 30)
+        # A few words short: padded above the floor, within the character cap.
+        self.assertTrue(16 <= tailor._word_count(fitted.core_skills[1]) <= 30)
+        self.assertLessEqual(tailor._char_count(fitted.core_skills[1]), 230)
         self.assertTrue(fitted.core_skills[1].startswith('Delivery Engineering: Support release governance'))
-        self.assertTrue(28 <= tailor._word_count(fitted.experience_bullets[0][0]) <= 35)
-        # Cut at the clause boundary, not inside the trailing list.
-        self.assertTrue(fitted.experience_bullets[0][0].endswith('used by delivery teams.'))
+        # Over the character cap: cut at the clause boundary, not inside the trailing list.
+        self.assertLessEqual(tailor._char_count(fitted.experience_bullets[0][0]), 215)
+        self.assertEqual(fitted.experience_bullets[0][0], rewritten_candidate().experience_bullets[0][0])
         # Fields already in budget are untouched.
         self.assertEqual(fitted.summary, payload.summary)
         self.assertEqual(fitted.experience_bullets[1], payload.experience_bullets[1])
+
+    def test_prepare_payload_strips_count_commentary(self):
+        payload = rewritten_candidate()
+        payload.experience_bullets[0][1] += ' (31 words including label) [including label and prefix]'
+        payload.core_skills[0] += ' 27 words total.'
+        prepared = tailor.prepare_payload(payload)
+        self.assertEqual(prepared.experience_bullets[0][1], rewritten_candidate().experience_bullets[0][1])
+        self.assertEqual(prepared.core_skills[0], rewritten_candidate().core_skills[0])
+        tailor._validate(prepared)
 
     def test_padding_is_capped_so_thin_fields_still_need_repair(self):
         short = 'Cloud engineer supporting reliable operations.'
@@ -240,7 +253,7 @@ class FinalizedValidationTests(unittest.TestCase):
         rejected_text = 'Cloud engineer supporting reliable operations.'
         _, rejected = tailor._apply_field_repairs(payload, {'summary': rejected_text}, plan)
         self.assertEqual(rejected, ['summary'])
-        self.assertIn('Returned 5 words; required 20-25 words.', plan['summary']['last_rejection']['reasons'])
+        self.assertIn('Returned 5 words; required 14-25 words.', plan['summary']['last_rejection']['reasons'])
         next_plan = tailor._repair_plan(payload, error, plan)
         self.assertEqual(next_plan['summary']['last_rejection']['text'], rejected_text)
         tailor._apply_field_repairs(payload, {'summary': rejected_text}, next_plan)
@@ -256,22 +269,22 @@ class FinalizedValidationTests(unittest.TestCase):
         plan = tailor._repair_plan(payload, error)
         self.assertEqual(len(plan), 1)
         spec = next(iter(plan.values()))
-        self.assertEqual((spec['min_words'], spec['max_words']), (28, 35))
+        self.assertEqual((spec['min_words'], spec['max_words']), (16, 35))
         self.assertIn('target_characters', spec)
-        self.assertNotIn('max_characters', spec)
-        self.assertEqual(spec['generation_word_count'], 28)
+        self.assertEqual(spec['max_characters'], 215)
+        # Overflow shrinks by characters; no exact word count is forced.
+        self.assertNotIn('generation_word_count', spec)
         next_plan = tailor._repair_plan(payload, error, plan)
         next_spec = next(iter(next_plan.values()))
         self.assertLess(next_spec['target_characters'], spec['target_characters'])
-        self.assertEqual(next_spec['generation_word_count'], 28)
 
     def test_character_estimate_cannot_reject_valid_wording_before_pdf_check(self):
         payload = rewritten_candidate()
         path = 'experience_bullets.0.0'
         plan = tailor._repair_plan(payload, tailor.FieldValidationError('fit', [path]))
-        plan[path]['target_characters'] = 224
+        plan[path]['target_characters'] = 150
         text = payload.experience_bullets[0][0]
-        self.assertGreater(len(text), 224)
+        self.assertGreater(len(text), 150)
         repaired, rejected = tailor._apply_field_repairs(payload, {path: text}, plan)
         self.assertEqual(rejected, [])
         tailor._validate(repaired, master().raw_text)
@@ -438,25 +451,36 @@ class FinalizedPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plan['experience_bullets.0.0']['required_prefix'], '')
 
     async def test_overflow_repair_renders_one_page_without_character_rejections(self):
+        from app.services.pdf_generator import build_ats_pdf as real_build
         original = rewritten_candidate()
-        fixed = original.model_copy(deep=True)
-        fixed.core_skills[1] = 'Delivery Engineering: Guide release checks and service readiness with clear change plans, repeatable build steps and shared review practices that help teams deliver reliable production changes.'
-        fixed.core_skills[2] = 'Leadership & Cross-Functional Collaboration: Lead technical work, align team goals and share service needs across groups to support clear ownership, sound decisions and reliable software delivery.'
-        fixed.experience_bullets[0][0] = 'Built resilient cloud systems to sustain 99.9% uptime for live workloads, linking high availability design to service needs so teams could run critical systems with fewer service disruptions.'
-        fixed.experience_bullets[0][2] = 'Used Ansible with Python and Bash scripts to make system setup and upkeep repeatable, reduce recovery time and help teams restore services with clear, consistent steps during operational work.'
-        fixed.experience_bullets[0][3] = 'Selected Project: Release Automation System - Built Jenkins release flows to track each artifact from build to deployment, giving teams a clear record of software changes across production stages.'
-        fixed.experience_bullets[1][0] = 'Raised release delivery efficiency by 60% through repeatable workflows that reduced errors, helped teams manage software changes and made each deployment easier to carry out across complex enterprise systems.'
-        fixed.experience_bullets[1][1] = 'Configured scalable ingress routes for container workloads to reach service readiness in 10-30 seconds, helping teams bring services online and meet runtime needs with reliable traffic paths for deployed applications.'
+        shorter = ('Engineered high-availability architecture sustaining 99.9% uptime for production workloads, '
+                   'aligning infrastructure design with service reliability needs.')
+        rendered = []
+
+        def render(context):
+            # The renderer reports one bullet wrapping to a third line on the first pass.
+            rendered.append(context)
+            if len(rendered) == 1:
+                raise CVOverflowError('page overflow', measurements=dict(
+                    content_height=950, available_height=939, fields=[dict(
+                        path='experience_bullets.0.0', lines=3, line_height=16, width=670,
+                        prefix_width=0, average_char_width=5.5)]))
+            return real_build(context)
+
         async def repair(settings, fields, context, feedback):
-            return {path: tailor._editable_fields(fixed)[path] for path in fields}
+            self.assertEqual(set(fields), {'experience_bullets.0.0'})
+            self.assertEqual(fields['experience_bullets.0.0']['max_characters'], 215)
+            return {'experience_bullets.0.0': shorter}
         with patch.object(tailor, '_request_tailored_payload', new=AsyncMock(return_value=original)) as request, \
-                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=repair)) as repair_call:
+                patch.object(tailor, 'request_field_repairs', new=AsyncMock(side_effect=repair)) as repair_call, \
+                patch.object(tailor, 'build_ats_pdf', side_effect=render):
             result, pdf = await tailor.generate_tailored_result('Reliable cloud services', master())
         request.assert_awaited_once()
         repair_call.assert_awaited_once()
         self.assertEqual(len(PdfReader(io.BytesIO(pdf)).pages), 1)
+        self.assertIn(shorter, result.text)
+        # Untouched fields keep the original wording.
         self.assertIn(original.experience_bullets[1][2], result.text)
-        self.assertGreater(len(original.experience_bullets[1][2]), 222)
 
     async def test_job_list_uses_same_grounded_pipeline_as_email(self):
         expected = object()

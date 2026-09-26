@@ -9,20 +9,25 @@ from app.services.cv_tailor import PayloadFormatError
 
 
 class FieldRepairTests(unittest.IsolatedAsyncioTestCase):
-    async def test_fit_request_uses_shortest_allowed_word_count(self):
-        fields = {'core_skills.0': {'min_words': 25, 'max_words': 30, 'generation_word_count': 25}}
+    async def test_character_cap_is_described_but_not_sent_as_max_length(self):
+        fields = {'core_skills.0': {'min_words': 16, 'max_words': 30, 'max_characters': 230}}
         client = AsyncMock()
         client.chat.completions.create.return_value = SimpleNamespace(choices=[
-            SimpleNamespace(message=SimpleNamespace(content=json.dumps({'core_skills.0': ' '.join(['word'] * 25)})))])
+            SimpleNamespace(message=SimpleNamespace(content=json.dumps({'core_skills.0': ' '.join(['word'] * 20)})))])
         with patch('app.services.cv_repair.AsyncOpenAI') as factory:
             factory.return_value.__aenter__ = AsyncMock(return_value=client)
             factory.return_value.__aexit__ = AsyncMock(return_value=False)
             await request_field_repairs(SimpleNamespace(openai_api_key='test', openai_model='gpt-4o'), fields, {}, [])
         schema = client.chat.completions.create.call_args.kwargs['response_format']['json_schema']['schema']
-        pattern = schema['properties']['core_skills.0']['pattern']
-        self.assertIsNotNone(re.fullmatch(pattern, ' '.join(['word'] * 25)))
-        for count in (24, 26, 30):
-            self.assertIsNone(re.fullmatch(pattern, ' '.join(['word'] * count)))
+        prop = schema['properties']['core_skills.0']
+        # Python enforces the cap; OpenAI strict mode only sees it as guidance.
+        self.assertNotIn('maxLength', prop)
+        self.assertIn('At most 230 characters', prop['description'])
+        # Word bounds stay as guardrails; no exact word count is forced.
+        for count in (16, 20, 30):
+            self.assertIsNotNone(re.fullmatch(prop['pattern'], ' '.join(['word'] * count)))
+        for count in (15, 31):
+            self.assertIsNone(re.fullmatch(prop['pattern'], ' '.join(['word'] * count)))
 
     async def test_word_range_is_sent_as_generation_constraint(self):
         fields = {'core_skills.0': {'min_words': 25, 'max_words': 30}}

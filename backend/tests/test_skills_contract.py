@@ -38,6 +38,6 @@ class SkillsContractTests(unittest.TestCase):
 
     def test_prompt_has_three_item_roles_and_rejection_warning(self):
         for requirement in ("EXACTLY 3 items", "Items 1 and 2 are dynamic domains",
-                            "Item 3 starts\n'Leadership & Cross-Functional Collaboration:'"):
+                            "Item 3 starts 'Leadership & Cross-Functional Collaboration:'"):
             self.assertIn(requirement, SYSTEM_PROMPT)
         self.assertNotIn('"Category 4 items"', SYSTEM_PROMPT)

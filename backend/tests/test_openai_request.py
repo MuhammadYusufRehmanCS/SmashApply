@@ -28,12 +28,51 @@ class OpenAIRequestTests(unittest.IsolatedAsyncioTestCase):
         for name, count in (('arqon', 4), ('ventera', 3)):
             group = schema['experience_bullets']['properties'][name]
             self.assertEqual((group['minItems'], group['maxItems']), (count, count))
-        for prop, low, high in ((schema['summary'], 20, 25), (schema['core_skills']['items'], 25, 30),
-                                (group['items'], 28, 35)):
+        from app.services.cv_schema import FIELD_LIMITS
+        for prop, field in ((schema['summary'], 'summary'), (schema['core_skills']['items'], 'core_skills'),
+                            (group['items'], 'experience_bullets')):
+            low, high, max_characters = FIELD_LIMITS[field]
+            self.assertNotIn('maxLength', prop)
+            self.assertIn(f'At most {max_characters} characters', prop['description'])
             for count in (low - 1, high + 1):
                 self.assertIsNone(re.fullmatch(prop['pattern'], ' '.join(['word'] * count)))
             for count in (low, high):
                 self.assertIsNotNone(re.fullmatch(prop['pattern'], ' '.join(['word'] * count)))
+
+    async def test_empty_response_reports_refusal_or_finish_reason(self):
+        from app.services.cv_tailor import PayloadFormatError
+        for message, finish_reason, expected in (
+                (SimpleNamespace(content=None, refusal="I can't help with that."), 'stop', "refusal: I can't help with that."),
+                (SimpleNamespace(content='', refusal=None), 'length', 'finish_reason: length')):
+            with self.subTest(expected=expected):
+                client = AsyncMock()
+                client.chat.completions.create.return_value = SimpleNamespace(choices=[
+                    SimpleNamespace(message=message, finish_reason=finish_reason)])
+                with patch('app.services.cv_tailor.AsyncOpenAI') as factory:
+                    factory.return_value.__aenter__ = AsyncMock(return_value=client)
+                    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+                    with self.assertRaisesRegex(PayloadFormatError, 'empty response') as caught:
+                        await _request_tailored_payload(Settings(_env_file=None, openai_api_key='test'), 'Test',
+                                                        system_prompt='Rules')
+                self.assertIn(expected, str(caught.exception))
+
+    async def test_flat_seven_bullets_are_reshaped_and_meta_text_stripped(self):
+        from tests.test_finalized_tailor import rewritten_candidate
+        original = rewritten_candidate()
+        data = original.model_dump()
+        data['experience_bullets'] = [*original.experience_bullets[0], *original.experience_bullets[1]]
+        data['summary'] = original.summary + ' (24 words total)'
+        data['core_skills'][1] = original.core_skills[1] + ' 29 words total. 29 words total.'
+        client = AsyncMock()
+        client.chat.completions.create.return_value = SimpleNamespace(choices=[
+            SimpleNamespace(message=SimpleNamespace(content=json.dumps(data)))])
+        with patch('app.services.cv_tailor.AsyncOpenAI') as factory:
+            factory.return_value.__aenter__ = AsyncMock(return_value=client)
+            factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await _request_tailored_payload(Settings(_env_file=None, openai_api_key='test'), 'Test', system_prompt='Rules')
+        self.assertEqual(result.experience_bullets, original.experience_bullets)
+        self.assertEqual(result.summary, original.summary)
+        self.assertEqual(result.core_skills, original.core_skills)
 
     async def test_reasoning_and_legacy_temperature_requests(self):
         for model in ("gpt-5.6-terra", "gpt-6-astra", "gpt-4o"):
