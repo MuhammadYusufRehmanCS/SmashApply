@@ -297,15 +297,22 @@ ABSOLUTE ZERO META-TEXT RULE:
 - Output ONLY pure, high-impact resume prose inside JSON string values.
 - NEVER append word counts, character counts, parenthetical annotations, line commentary, or repeated count phrases anywhere.
 
-MAXIMUM ATS KEYWORD DENSITY & MATCHING:
+MAXIMUM ATS KEYWORD DENSITY & TECHNICAL EXPERTISE:
 - Extract all required skills, tools, platforms, frameworks, methodologies, security standards, and responsibilities from the target JD.
 - Reuse exact JD wording (same spelling, casing, and acronyms) across all fields so ATS parsers find literal matches.
-- DENSE KEYWORD REPETITION: Allow core technologies and skills to appear naturally across multiple sections (e.g., in Summary, Core Skills, AND Experience Bullets) to maximize ATS term frequency and relevance scoring. Do NOT limit tool mentions to once per resume.
+- Allow core technologies and skills to appear naturally across multiple sections (in Summary, Core Skills, AND Experience Bullets) to maximize ATS keyword frequency.
 - Fill 'keywords' key with the top priority JD skills, tools, and certifications.
+
+CORE SKILLS / TECHNICAL EXPERTISE FORMAT (HIGH KEYWORD DENSITY):
+- 'core_skills' MUST BE DENSE TOOL LISTS, NOT LONG EXPLANATIONS. Point directly to the exact tools, platforms, and frameworks you know.
+- core_skills MUST contain EXACTLY 3 items formatted as "Category: Tool1, Tool2, Tool3, Framework4, Platform5":
+  * Item 1: Dynamic technical category named with JD terminology listing specific JD tools & platforms (e.g., "Cloud & Infrastructure: AWS (EC2, S3, EKS), Terraform, Docker, Kubernetes, Ansible").
+  * Item 2: Dynamic technical/DevOps category named with JD terminology listing specific JD tools, CI/CD, & security frameworks (e.g., "DevSecOps & Security: GitHub Actions, Jenkins, Python, FedRAMP, NIST 800-53, Linux").
+  * Item 3: MUST start 'Leadership & Cross-Functional Collaboration:' followed by a concise list of ownership capabilities (e.g., "Technical Ownership, Agile/Scrum, Customer Onboarding, Cross-Functional Team Leadership, Compliance Advisory").
 
 DYNAMIC WORKSTREAM & METRIC GENERATION:
 - You are FULLY AUTHORIZED AND REQUIRED to aggressively expand technical workstreams, engineering architectures, scale, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, cost savings, MTTR) tailored precisely to the JD's stack.
-- FILL THE CHARACTER BUDGET: Expand every bullet, summary, and core skill to near its maximum character limit (Bullets: ~190–210 chars; Summary: ~220–235 chars; Core Skills: ~210–225 chars) to maximize keyword density and visual space on the page.
+- Expand every bullet to fill its character budget (~180–210 characters) with high-density technical achievements and JD keywords.
 
 EXPERIENCE BULLETS RULES:
 - Rewrite every bullet into a high-density, role-relevant workstream packed with JD keywords and technical implementations; never copy source or use generic fluff.
@@ -324,7 +331,6 @@ NO EXPERIENCE DURATIONS:
 STRICT OUTPUT CONTRACT:
 - role_title: Concise role suffix of at most 4 words (max 32 characters).
 - summary: One dense paragraph stating role identity, primary JD technologies, core methodologies, and value proposition.
-- core_skills: EXACTLY 3 items ("Domain label: description"). Items 1 and 2 are dynamic domains named with JD terminology. Item 3 starts 'Leadership & Cross-Functional Collaboration:' and covers leadership, technical ownership, and cross-team cooperation.
 - plain text only: no HTML tags or entities, no newlines. Restrained **bold** around key JD terms is permitted.
 - Never drop bullets or alter employer names, dates, education, or historical titles.
 """
