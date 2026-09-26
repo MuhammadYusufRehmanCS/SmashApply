@@ -295,34 +295,25 @@ Follow the response schema's exact shape for 'experience_bullets' (keys arqon an
 
 ABSOLUTE ZERO META-TEXT RULE:
 - Output ONLY pure, high-impact resume prose inside JSON string values.
-- NEVER append word counts, character counts, parenthetical annotations, line commentary, or repeated count phrases anywhere (e.g., NEVER write "28 words total", "7 words", "including label").
+- NEVER append word counts, character counts, parenthetical annotations, line commentary, or repeated count phrases anywhere.
 
-JOB-SPECIFIC ALIGNMENT:
-- First extract the JD's required skills, tools, platforms, frameworks, methodologies, security standards, and responsibilities.
-- Reuse that exact JD wording (same spelling, casing, and acronyms) in the rewritten fields so ATS parsers find literal matches; never substitute a synonym for a JD term.
-- MAXIMUM KEYWORD BREADTH: include as many distinct JD technologies as possible, but mention each specific keyword EXACTLY ONCE, spread across core_skills and experience bullets per STRATEGIC DISTRIBUTION. Use the JD's exact wording for concepts, methodologies, and responsibilities everywhere else.
-- keywords: list the JD's relevant requirements in priority order, including requirements the CV does not support; do not list only the terms you used.
+MAXIMUM ATS KEYWORD DENSITY & MATCHING:
+- Extract all required skills, tools, platforms, frameworks, methodologies, security standards, and responsibilities from the target JD.
+- Reuse exact JD wording (same spelling, casing, and acronyms) across all fields so ATS parsers find literal matches.
+- DENSE KEYWORD REPETITION: Allow core technologies and skills to appear naturally across multiple sections (e.g., in Summary, Core Skills, AND Experience Bullets) to maximize ATS term frequency and relevance scoring. Do NOT limit tool mentions to once per resume.
+- Fill 'keywords' key with the top priority JD skills, tools, and certifications.
 
-STRICT HARD CONSTRAINT (ONE MENTION PER TOOL):
-- A named technology (e.g., AWS, Terraform, Jenkins, Docker) or its alias (e.g., EKS/Kubernetes) may appear AT MOST ONCE across the entire resume. Maximum 1 total mention per tool across all fields.
-
-STRATEGIC DISTRIBUTION:
-- Assign each JD tool to exactly one location: either in 'core_skills' OR in a single 'experience_bullets' bullet.
-- Experience bullet: when the tool shows direct, measurable impact in that workstream. Selected Project bullets are good homes for high-impact JD tools.
-- 'core_skills': when the tool fits a domain but has no bullet of its own.
-- 'summary' and 'role_title' MUST NOT name specific tools; use conceptual terms instead (e.g., "cloud infrastructure", "CI/CD automation").
-
-DYNAMIC WORKSTREAM & METRIC GENERATION (MAXIMUM IMPACT):
-- You are FULLY AUTHORIZED AND REQUIRED to aggressively expand and introduce realistic, high-impact technical workstreams, engineering architectures, scale, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, cost savings, MTTR) tailored precisely to the JD's stack.
-- DO NOT restrict yourself to the Master CV's original scope. Expand project depth, system complexities, and engineering outcomes dynamically to fill each bullet's character budget (~180–210 characters) with high-density technical achievements.
+DYNAMIC WORKSTREAM & METRIC GENERATION:
+- You are FULLY AUTHORIZED AND REQUIRED to aggressively expand technical workstreams, engineering architectures, scale, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, cost savings, MTTR) tailored precisely to the JD's stack.
+- FILL THE CHARACTER BUDGET: Expand every bullet, summary, and core skill to near its maximum character limit (Bullets: ~190–210 chars; Summary: ~220–235 chars; Core Skills: ~210–225 chars) to maximize keyword density and visual space on the page.
 
 EXPERIENCE BULLETS RULES:
-- Treat the Master CV as a baseline theme only: heavily rewrite, elevate, and expand every workstream into a principal-level engineering achievement matching the JD's exact technical domain; never copy the source or only swap synonyms.
+- Rewrite every bullet into a high-density, role-relevant workstream packed with JD keywords and technical implementations; never copy source or use generic fluff.
 - Start every bullet with a strong past-tense action verb (e.g., Architected, Engineered, Automated, Optimized, Migrated, Hardened, Orchestrated).
-- Each bullet = strong action verb + JD-aligned implementation + dynamic, high-impact quantified outcome (percentages, SLA/SLO gains, cost savings, build-time drops, or MTTR improvements), written as one full, highly specific sentence.
+- Each bullet = strong action verb + JD-aligned implementation + dynamic quantified outcome (percentages, SLA/SLO gains, cost savings, build-time drops, or MTTR improvements), written as one full, highly specific sentence.
 - BANNED OPENERS: Never start with "Responsible for", "Worked on", "Helped", "Assisted", "Involved in", or "Spearheaded".
 - BANNED FLUFF: Prohibit filler words like "streamlined processes", "enhanced operational efficiency", "leveraging", "robust", "cutting-edge", "seamlessly", "expertise in", "proficient in".
-- Do not repeat opening verbs within the same employer. Never repeat a claim or metric, even via paraphrase.
+- Do not repeat opening verbs within the same employer.
 - CRITICAL PROJECT LABELS: Bullets 1 through N-1 must NOT contain a project label. ONLY the final bullet of each employer MUST start with the exact prefix:
   * Arqon Bullet 4: "Selected Project: Release Automation System - [prose]"
   * Ventera Bullet 3: "Selected Project: Automated Infrastructure Provisioning - [prose]"
@@ -332,8 +323,8 @@ NO EXPERIENCE DURATIONS:
 
 STRICT OUTPUT CONTRACT:
 - role_title: Concise role suffix of at most 4 words (max 32 characters).
-- summary: One concise paragraph stating role identity, core JD skills, and value; no cliche openers.
-- core_skills: EXACTLY 3 items ("Domain label: description"). Items 1 and 2 are dynamic domains named with JD terminology. Item 3 starts 'Leadership & Cross-Functional Collaboration:' and covers only leadership, technical ownership, and cross-team cooperation.
+- summary: One dense paragraph stating role identity, primary JD technologies, core methodologies, and value proposition.
+- core_skills: EXACTLY 3 items ("Domain label: description"). Items 1 and 2 are dynamic domains named with JD terminology. Item 3 starts 'Leadership & Cross-Functional Collaboration:' and covers leadership, technical ownership, and cross-team cooperation.
 - plain text only: no HTML tags or entities, no newlines. Restrained **bold** around key JD terms is permitted.
 - Never drop bullets or alter employer names, dates, education, or historical titles.
 """
