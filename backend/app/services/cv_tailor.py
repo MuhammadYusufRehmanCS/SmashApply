@@ -297,6 +297,11 @@ ABSOLUTE ZERO META-TEXT RULE:
 - Output ONLY pure, high-impact resume prose inside JSON string values.
 - NEVER append word counts, character counts, parenthetical annotations, line commentary, or repeated count phrases anywhere.
 
+HEADER ROLE TITLE CONSTRAINT (STRICT SINGLE LINE):
+- role_title MUST be extremely concise (MAXIMUM 25 CHARACTERS total, or 2-3 short terms max).
+- Examples: "CLOUD ENGINEER | DEVOPS", "SENIOR DEVOPS ENGINEER", "PLATFORM & CLOUD ENGINEER".
+- NEVER output long strings like "DISTINGUISHED ENGINEER | MULTI-CLOUD | TERRAFORM | CI/CD | CLOUD AUTOMATION" as this forces a second line wrap.
+
 MAXIMUM ATS KEYWORD DENSITY & TECHNICAL EXPERTISE:
 - Extract all required skills, tools, platforms, frameworks, methodologies, security standards, and responsibilities from the target JD.
 - Reuse exact JD wording (same spelling, casing, and acronyms) across all fields so ATS parsers find literal matches.
@@ -310,14 +315,15 @@ CORE SKILLS / TECHNICAL EXPERTISE FORMAT (HIGH KEYWORD DENSITY):
   * Item 2: Dynamic technical/DevOps category named with JD terminology listing specific JD tools, CI/CD, & security frameworks (e.g., "DevSecOps & Security: GitHub Actions, Jenkins, Python, FedRAMP, NIST 800-53, Linux").
   * Item 3: MUST start 'Leadership & Cross-Functional Collaboration:' followed by a concise list of ownership capabilities (e.g., "Technical Ownership, Agile/Scrum, Customer Onboarding, Cross-Functional Team Leadership, Compliance Advisory").
 
-DYNAMIC WORKSTREAM & METRIC GENERATION:
-- You are FULLY AUTHORIZED AND REQUIRED to aggressively expand technical workstreams, engineering architectures, scale, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, cost savings, MTTR) tailored precisely to the JD's stack.
-- Expand every bullet to fill its character budget (~180–210 characters) with high-density technical achievements and JD keywords.
+DYNAMIC WORKSTREAM & METRIC GENERATION (FULL AUTHORIZATION):
+- You are FULLY AUTHORIZED AND REQUIRED to dynamically generate, construct, and invent realistic, high-impact technical workstreams, engineering architectures, systems implementations, and quantified metrics (e.g., SLA percentages, build-time reductions, latency cuts, MTTR) tailored precisely to the target JD.
+- DO NOT limit or restrict yourself to the Master CV's original workstreams or phrasing. Construct new, principal-level engineering achievements that align perfectly with the JD's requirements.
+- Fill every bullet to its target character budget (~180–210 characters) with dense technical achievements and keywords.
 
 EXPERIENCE BULLETS RULES:
-- Rewrite every bullet into a high-density, role-relevant workstream packed with JD keywords and technical implementations; never copy source or use generic fluff.
+- Treat the Master CV as a baseline theme only: heavily rewrite, elevate, and expand every workstream into a principal-level engineering achievement matching the JD's exact technical domain; never copy the source or only swap synonyms.
 - Start every bullet with a strong past-tense action verb (e.g., Architected, Engineered, Automated, Optimized, Migrated, Hardened, Orchestrated).
-- Each bullet = strong action verb + JD-aligned implementation + dynamic quantified outcome (percentages, SLA/SLO gains, cost savings, build-time drops, or MTTR improvements), written as one full, highly specific sentence.
+- Each bullet = strong action verb + JD-aligned technical implementation + dynamic quantified outcome (percentages, SLA/SLO gains, cost savings, build-time drops, or MTTR improvements), written as one full, highly specific sentence.
 - BANNED OPENERS: Never start with "Responsible for", "Worked on", "Helped", "Assisted", "Involved in", or "Spearheaded".
 - BANNED FLUFF: Prohibit filler words like "streamlined processes", "enhanced operational efficiency", "leveraging", "robust", "cutting-edge", "seamlessly", "expertise in", "proficient in".
 - Do not repeat opening verbs within the same employer.
@@ -329,8 +335,7 @@ NO EXPERIENCE DURATIONS:
 - Never mention years of experience, tenure, or any numeric duration or timeframe anywhere (e.g., "5+ years", "over 3 years", "within 6 months").
 
 STRICT OUTPUT CONTRACT:
-- role_title: Concise role suffix of at most 4 words (max 32 characters).
-- summary: One dense paragraph stating role identity, primary JD technologies, core methodologies, and value proposition.
+- summary: One dense paragraph stating role identity, primary JD technologies, core methodologies, and value proposition (~220-235 characters).
 - plain text only: no HTML tags or entities, no newlines. Restrained **bold** around key JD terms is permitted.
 - Never drop bullets or alter employer names, dates, education, or historical titles.
 """

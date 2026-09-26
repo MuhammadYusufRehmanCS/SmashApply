@@ -67,22 +67,29 @@ class PDFGeneratorTests(unittest.TestCase):
                          'Example University', 'Languages: English'):
             self.assertIn(expected, text)
 
-    def test_header_keeps_fixed_fonts_and_complete_role(self):
+    def test_long_header_shrinks_font_to_stay_on_one_line(self):
         data = template_context_from_text(CV)
         with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
             line = document.pages[0].extract_text_lines()[0]
             self.assertIn('CLOUD AUTOMATION', line['text'])
-            self.assertAlmostEqual(line['chars'][0]['size'], 12.48, delta=0.03)
+            # A header that fits keeps the full 12.48pt size.
             self.assertTrue(all(abs(c['size'] - 12.48) < .03 for c in line['chars']))
-        for title in ('DATA CENTER PLANT ENGINEER, MECHANICAL', 'Senior Cloud Platform & DevSecOps Engineer'):
+        for title in ('Distinguished Engineer', 'DATA CENTER PLANT ENGINEER, MECHANICAL',
+                      'Senior Cloud Platform & DevSecOps Engineer'):
             data['role_title'] = title
             with pdfplumber.open(io.BytesIO(build_ats_pdf(data))) as document:
-                line = document.pages[0].extract_text_lines()[0]
+                lines = document.pages[0].extract_text_lines()
+                line = lines[0]
+                # One line: the whole banner ends on the first line, inside the margin.
                 self.assertIn('CLOUD AUTOMATION', line['text'])
                 self.assertLessEqual(line['x1'], 576.5)
-                self.assertNotIn('& |', line['text'])
-                self.assertIn('ENGINEER', line['text'])
-                self.assertAlmostEqual(line['chars'][0]['size'], 12.48, delta=0.03)
+                # The complete (4-word, 32-character) title is kept; the font shrinks instead.
+                from app.services.cv_tailor import short_role_title
+                self.assertIn(short_role_title(title).upper(), line['text'])
+                sizes = {round(c['size'], 2) for c in line['chars']}
+                self.assertEqual(len(sizes), 1)
+                self.assertLess(sizes.pop(), 12.45)
+                self.assertGreaterEqual(min(c['size'] for c in line['chars']), 9 - 0.03)
                 self.assertIn('Automated deployments with Terraform.', document.pages[0].extract_text())
             self.assertEqual(data['role_title'], title)
 

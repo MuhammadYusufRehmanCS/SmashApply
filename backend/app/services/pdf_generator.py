@@ -192,7 +192,17 @@ async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
                     const range = document.createRange();
                     range.selectNodeContents(header);
                     const available = header.getBoundingClientRect().width;
-                    while (range.getBoundingClientRect().width > available + 0.5 && words.length > 2) {
+                    const tooWide = () => range.getBoundingClientRect().width > available + 0.5;
+                    // First shrink the header font to keep the full title on one line.
+                    // line-height is fixed in CSS, so the rest of the page does not move.
+                    const MIN_HEADER_PT = 9;
+                    let size = parseFloat(getComputedStyle(header).fontSize) * 0.75;
+                    while (tooWide() && size > MIN_HEADER_PT) {
+                        size = Math.max(MIN_HEADER_PT, size - 0.1);
+                        header.style.setProperty('font-size', size.toFixed(2) + 'pt', 'important');
+                    }
+                    // Only if it still does not fit at the minimum size, drop role modifiers.
+                    while (tooWide() && words.length > 2) {
                         // Keep the final role noun (Engineer, Architect, etc.).
                         const modifier = words.findIndex(w => /^(senior|junior|lead|principal|staff|sr\.?|jr\.?)$/i.test(w));
                         words.splice(words.length > 3 ? words.length - 2 : (modifier >= 0 ? modifier : words.length - 2), 1);
@@ -204,7 +214,7 @@ async def _render_pdf(html: str) -> tuple[bytes, dict | None]:
                         header.style.whiteSpace = 'normal';
                 }
                 if (header && header.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(header).lineHeight) + 0.5)
-                    return 'Header exceeds two physical lines. Shorten the role suffix without changing font size.';
+                    return 'Header exceeds two physical lines even at the minimum header font size. Shorten the role suffix.';
                 const summary = document.querySelector('[data-summary]');
                 const lineHeight = summary ? parseFloat(getComputedStyle(summary).lineHeight) : 0;
                 if (summary && summary.getBoundingClientRect().height > 2 * lineHeight + 0.5)
