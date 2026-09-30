@@ -92,6 +92,43 @@ class FocusedScrapeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(jobs[0]['company'],'Example')
         self.assertEqual(jobs[0]['site'],'handshake')
 
+    def test_handshake_remote_listing_is_kept_as_us_remote(self):
+        import json
+        from app.services.job_scraper import _handshake_jobs
+        listing = dict(jobTitle='DevOps Engineer', employerName='Example',
+                       publicUrl='https://app.joinhandshake.com/public/jobs/456',
+                       parsedLocations=[dict(city=None, state=None, isRemote=True)], firstActiveAt='2026-09-10T00:00:00Z')
+        html = '<script id="__NEXT_DATA__" type="application/json">'+json.dumps({'props':{'pageProps':{'jobs':[listing]}}})+'</script>'
+        jobs = _handshake_jobs(html, [('DevOps Engineer', True)])
+        self.assertEqual([job['location'] for job in jobs], ['Remote, United States'])
+
+    def test_handshake_status_codes_explain_failures(self):
+        import httpx
+        from app.services.job_scraper import _handshake_http_error
+        url = 'https://joinhandshake.com/find-jobs/role/web-it/'
+        for status, headers, expected in (
+                (401, {}, 'sign-in required (401 Unauthorized)'),
+                (403, {}, 'request blocked (403 Forbidden); Handshake may be rejecting automated requests'),
+                (429, {'retry-after': '30'}, 'rate limited (429 Too Many Requests); retry after 30s'),
+                (503, {}, 'Handshake server error (503)')):
+            response = httpx.Response(status, headers=headers, request=httpx.Request('GET', url))
+            error = httpx.HTTPStatusError('failed', request=response.request, response=response)
+            self.assertEqual(_handshake_http_error(error, url), f'{url}: {expected}')
+
+    def test_handshake_reports_why_zero_jobs_matched(self):
+        import asyncio, json
+        from unittest.mock import AsyncMock, patch
+        from app.services import job_scraper
+        listing = dict(jobTitle='Website Designer', employerName='Example',
+                       publicUrl='https://app.joinhandshake.com/public/jobs/1',
+                       parsedLocations=[dict(city='Boston', state='Massachusetts')])
+        html = '<script id="__NEXT_DATA__" type="application/json">'+json.dumps({'props':{'pageProps':{'jobs':[listing]}}})+'</script>'
+        with patch.object(job_scraper, '_fetch_text', new=AsyncMock(return_value=html)):
+            jobs, errors = asyncio.run(job_scraper._scrape_handshake_sources([('Cloud Engineer', True)]))
+        self.assertEqual(jobs, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn('3 public listings checked across 3 pages; none matched Cloud Engineer', errors[0])
+
     def test_cv_roles_do_not_include_unrelated_primary(self):
         from app.services.job_scraper import cv_search_roles, cv_alignment_score
         roles = cv_search_roles('AWS Azure Terraform Docker Kubernetes CI/CD Linux Windows Server', 'Receptionist')

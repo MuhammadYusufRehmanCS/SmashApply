@@ -1343,19 +1343,62 @@ def cv_alignment_score(job: Mapping[str, Any], master_text: str, roles: list[tup
     return 10 + sum(2 for skill in skills if skill in master and skill in job_text)
 
 
-def _handshake_jobs(html_text: str, roles: list[tuple[str, bool]]) -> list[dict]:
+# Public (signed-out) Handshake category pages. Each shows only its 15 newest
+# listings: the site ignores ?page= and ?query=, so coverage comes from choosing
+# categories that contain the CV's roles. Software Engineering holds cloud,
+# DevOps and platform roles; Web & IT and Remote catch the rest.
+HANDSHAKE_LISTING_URLS = (
+    "https://joinhandshake.com/find-jobs/role/software-engineering/",
+    "https://joinhandshake.com/find-jobs/role/web-it/",
+    "https://joinhandshake.com/find-jobs/remote/",
+)
+HANDSHAKE_STATUS_REASONS = {
+    401: "sign-in required (401 Unauthorized)",
+    403: "request blocked (403 Forbidden); Handshake may be rejecting automated requests",
+    404: "page not found (404); Handshake may have moved its public job pages",
+    429: "rate limited (429 Too Many Requests)",
+}
+
+
+def _handshake_http_error(exc: BaseException, url: str) -> str:
+    """Explain a Handshake failure by status code instead of a generic httpx message."""
+    response = getattr(exc, "response", None)
+    if response is None:
+        return f"{url}: {_format_error(exc)}"
+    status = response.status_code
+    reason = HANDSHAKE_STATUS_REASONS.get(status) or (
+        f"Handshake server error ({status})" if status >= 500 else f"HTTP {status}")
+    retry_after = response.headers.get("retry-after")
+    if status == 429 and retry_after:
+        reason += f"; retry after {retry_after}s"
+    return f"{url}: {reason}"
+
+
+def _handshake_listings(html_text: str) -> list[dict]:
     match = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', html_text, re.S)
     if not match:
         raise ValueError("Public listing data unavailable; Handshake may require sign-in")
-    listings = json.loads(match[1])["props"]["pageProps"]["jobs"]
+    return json.loads(match[1])["props"]["pageProps"]["jobs"]
+
+
+def _handshake_location(item: Mapping[str, Any]) -> str:
+    locations = item.get("parsedLocations") or []
+    location = _join_unique(_join_unique([loc.get("city"), loc.get("state")]) for loc in locations)
+    # Remote listings carry no city/state; joinhandshake.com is Handshake's US site.
+    if not location and any(loc.get("isRemote") for loc in locations):
+        return "Remote, United States"
+    return location
+
+
+def _handshake_jobs(html_text: str, roles: list[tuple[str, bool]]) -> list[dict]:
     jobs = []
-    for item in listings:
+    for item in _handshake_listings(html_text):
         title = _clean_text(item.get("jobTitle"))
         role = _match_role(title, roles)
         url = item.get("publicUrl", "")
         if not role or urlparse(url).hostname != "app.joinhandshake.com":
             continue
-        location = _join_unique(_join_unique([loc.get("city"), loc.get("state")]) for loc in item.get("parsedLocations", []))
+        location = _handshake_location(item)
         if not _has_us_signal(location):
             continue
         jobs.append(_job_dict(title=title, company=item.get("employerName", ""), location=location,
@@ -1369,13 +1412,24 @@ async def _scrape_handshake_sources(roles: list[tuple[str, bool]]) -> tuple[list
         return [], ["handshake: httpx is not installed"]
     settings = get_settings()
     jobs, errors = [], []
+    checked = 0
     async with httpx.AsyncClient(headers=HTTP_HEADERS, timeout=settings.job_http_timeout_seconds, follow_redirects=True) as client:
-        for url in ("https://joinhandshake.com/find-jobs/role/web-it/", "https://joinhandshake.com/find-jobs/remote/"):
+        for url in HANDSHAKE_LISTING_URLS:
             try:
-                jobs.extend(_handshake_jobs(await _fetch_text(client, url), roles))
+                html_text = await _fetch_text(client, url)
+                checked += len(_handshake_listings(html_text))
+                jobs.extend(_handshake_jobs(html_text, roles))
             except Exception as exc:
-                errors.append(f"handshake: {_format_error(exc)}")
+                message = _handshake_http_error(exc, url)
+                logger.warning("Handshake listing fetch failed: %s", message)
+                errors.append(f"handshake: {message}")
         jobs = _dedupe_jobs(jobs)[:15]
+        if not jobs and checked:
+            # Reachable but nothing matched: say so instead of silently returning 0 jobs.
+            message = (f"{checked} public listings checked across {len(HANDSHAKE_LISTING_URLS)} pages; none matched "
+                       f"{', '.join(role for role, _ in roles)} (public pages show only the 15 newest jobs per category)")
+            logger.info("Handshake: %s", message)
+            errors.append(f"handshake: {message}")
         for job in jobs:
             try:
                 detail = await _fetch_text(client, job["job_url"])
@@ -1385,7 +1439,9 @@ async def _scrape_handshake_sources(roles: list[tuple[str, bool]]) -> tuple[list
                 if not job["description"]:
                     errors.append("handshake: some public listings require sign-in for full descriptions")
             except Exception as exc:
-                errors.append(f"handshake/detail: {_format_error(exc)}")
+                message = _handshake_http_error(exc, job["job_url"])
+                logger.warning("Handshake detail fetch failed: %s", message)
+                errors.append(f"handshake/detail: {message}")
     return jobs, list(dict.fromkeys(errors))
 
 
