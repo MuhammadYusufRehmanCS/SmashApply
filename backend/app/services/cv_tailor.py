@@ -335,7 +335,7 @@ NO EXPERIENCE DURATIONS:
 - Never mention years of experience, tenure, or any numeric duration or timeframe anywhere (e.g., "5+ years", "over 3 years", "within 6 months").
 
 STRICT OUTPUT CONTRACT:
-- summary: One dense paragraph stating role identity, primary JD technologies, core methodologies, and value proposition (~220-235 characters).
+- summary: EXACTLY 2 wrapping lines of dense prose as a single paragraph (~220–260 characters, no newlines). Sentence 1 states role identity and primary JD focus without repeating prepositions (avoid "specializing in with expertise in"). Sentence 2 highlights core methodology, security/compliance, or value proposition.
 - plain text only: no HTML tags or entities, no newlines. Restrained **bold** around key JD terms is permitted.
 - Never drop bullets or alter employer names, dates, education, or historical titles.
 """
@@ -2731,8 +2731,8 @@ def _validate_tailored_payload(
 
     if summary_required and require_complete and not payload.summary.strip():
         reject("Model did not return an Executive Summary.")
-    if require_complete and (len(payload.summary.split()) > 25 or "\n" in payload.summary):
-        reject("Model returned an Executive Summary exceeding 25 words or one paragraph.")
+    if require_complete and (len(payload.summary.split()) > 42 or "\n" in payload.summary):
+        reject("Model returned an Executive Summary exceeding 42 words or one paragraph.")
     if require_complete and (len(payload.role_title.split()) > 4 or len(payload.role_title) > 32):
         reject("Model returned a role title exceeding four words or 32 characters.")
     skills_array = payload.core_skills

@@ -8,7 +8,7 @@
 # output. Characters are counted without Markdown markers.
 FIELD_LIMITS = {
     "role_title": (1, 4, None),
-    "summary": (14, 25, 240),
+    "summary": (14, 42, 260),
     "core_skills": (16, 30, 230),
     "experience_bullets": (16, 35, 215),
 }

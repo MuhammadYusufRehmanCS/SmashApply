@@ -151,7 +151,7 @@ class FinalizedValidationTests(unittest.TestCase):
         payload.core_skills[0] = 'Cloud Architecture: Reliable service design.'
         with self.assertRaisesRegex(tailor.FinalizedValidationError, 'Insufficient technical detail') as caught:
             tailor._validate_active_rewrite(payload, master())
-        self.assertIn('summary: target 14-25', str(caught.exception))
+        self.assertIn('summary: target 14-42', str(caught.exception))
         self.assertIn('Core Skills 1: target 16-30', str(caught.exception))
 
     def test_jd_required_tools_still_cannot_repeat(self):
@@ -253,7 +253,7 @@ class FinalizedValidationTests(unittest.TestCase):
         rejected_text = 'Cloud engineer supporting reliable operations.'
         _, rejected = tailor._apply_field_repairs(payload, {'summary': rejected_text}, plan)
         self.assertEqual(rejected, ['summary'])
-        self.assertIn('Returned 5 words; required 14-25 words.', plan['summary']['last_rejection']['reasons'])
+        self.assertIn('Returned 5 words; required 14-42 words.', plan['summary']['last_rejection']['reasons'])
         next_plan = tailor._repair_plan(payload, error, plan)
         self.assertEqual(next_plan['summary']['last_rejection']['text'], rejected_text)
         tailor._apply_field_repairs(payload, {'summary': rejected_text}, next_plan)
@@ -344,7 +344,7 @@ class FinalizedValidationTests(unittest.TestCase):
         tailor._validate(candidate())
 
     def test_invalid_structures_and_duplicates_rejected(self):
-        def summary(p): p.summary = "word " * 41
+        def summary(p): p.summary = "word " * 43
         def skills(p): p.technical_expertise.pop()
         def leadership(p): p.technical_expertise[2] = "Teamwork: Coordinate departments."
         def arqon(p): p.experience_bullets[0].pop(0)
