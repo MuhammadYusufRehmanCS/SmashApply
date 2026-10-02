@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { FileText, Loader2, Search } from "lucide-react";
+import { FileText, Loader2, Mail, Search } from "lucide-react";
 
 import { InspectorPanel } from "@/components/inspector-panel";
 import { JobTable } from "@/components/job-table";
@@ -252,6 +252,36 @@ export default function DashboardPage() {
 
           <div className="ml-auto flex items-center gap-2">
             <button
+              id="fetch-btn"
+              type="button"
+              onClick={handleEmailReferral}
+              disabled={fetchingEmail || uploading || !masterCv}
+              title={
+                fetchingEmail
+                  ? "Checking Gmail and tailoring your resume. Complete Google sign-in if prompted."
+                  : !masterCv
+                    ? "Upload your master CV to get started."
+                    : "Fetch latest email referral & tailor resume. Connect Gmail on your first use."
+              }
+              className="group flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-white/10 bg-[#111318] px-2.5 text-xs font-medium text-zinc-300 transition-colors hover:border-emerald-400/35 hover:text-zinc-100 disabled:opacity-50"
+            >
+              {fetchingEmail ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-300" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 text-emerald-300" />
+              )}
+              <span className="max-w-[220px] truncate">{emailStatus ?? "Tailor from Email Referral"}</span>
+            </button>
+            <span role="status" className="sr-only">
+              {fetchingEmail ? "Checking Gmail and tailoring your resume." : ""}
+            </span>
+
+            {emailPreview && (
+              <button type="button" onClick={() => setEmailPreview(null)} className="whitespace-nowrap text-xs text-zinc-300 underline">
+                Close preview
+              </button>
+            )}
+            <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -288,39 +318,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
-
-      <div className="relative flex shrink-0 justify-center border-b border-white/10 px-4 py-3">
-        <div id="gmail-action-card" className="unique-gmail-fetch-container">
-          <div className="gmail-icon-sparkle-wrapper" aria-hidden="true">
-            <svg className="unique-gmail-m-icon" viewBox="0 0 48 36" fill="none">
-              <rect className="m-envelope" x="2" y="2" width="44" height="32" rx="5" pathLength="100" />
-              <path className="m-stroke" d="M8 30V9l16 13L40 9v21" pathLength="100" />
-              <circle className="m-seal" cx="24" cy="22" r="2.4" />
-            </svg>
-            <span className="gmail-sparkle s1" />
-            <span className="gmail-sparkle s2" />
-            <span className="gmail-sparkle s3" />
-            <span className="gmail-sparkle s4" />
-          </div>
-          <button
-            id="fetch-btn"
-            type="button"
-            onClick={handleEmailReferral}
-            disabled={fetchingEmail || uploading || !masterCv}
-            className="cool-button"
-          >
-            {fetchingEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {emailStatus ?? "Fetch Latest Email Referral & Tailor Resume"}
-          </button>
-          <span role="status" className="helper-text-area">
-            <i className="info-icon not-italic" aria-hidden="true">ℹ️</i>
-            <span>
-              {fetchingEmail ? "Checking Gmail and tailoring your resume. Complete Google sign-in if prompted." : !masterCv ? "Upload your master CV to get started." : <>Connect <span className="highlight-gmail">Gmail</span> on your first use.</>}
-            </span>
-          </span>
-        </div>
-        {emailPreview && <button type="button" onClick={() => setEmailPreview(null)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-300 underline">Close preview</button>}
-      </div>
 
       {actionError && (
         <div role="alert" className="shrink-0 border-b border-red-500/20 bg-red-500/10 px-4 py-1.5 text-xs text-red-400">
