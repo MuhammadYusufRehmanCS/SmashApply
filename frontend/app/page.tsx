@@ -289,20 +289,37 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-white/10 px-4 py-2">
-        <button
-          type="button"
-          onClick={handleEmailReferral}
-          disabled={fetchingEmail || uploading || !masterCv}
-          className="flex items-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-300 disabled:opacity-50"
-        >
-          {fetchingEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {emailStatus ?? "Fetch Latest Email Referral & Tailor Resume"}
-        </button>
-        <span role="status" className="text-xs text-zinc-400">
-          {fetchingEmail ? "Checking Gmail and tailoring your resume. Complete Google sign-in if prompted." : !masterCv ? "Upload your master CV to get started." : "Connect Gmail on your first use."}
-        </span>
-        {emailPreview && <button type="button" onClick={() => setEmailPreview(null)} className="ml-auto text-xs text-zinc-300 underline">Close preview</button>}
+      <div className="relative flex shrink-0 justify-center border-b border-white/10 px-4 py-3">
+        <div id="gmail-action-card" className="unique-gmail-fetch-container">
+          <div className="gmail-icon-sparkle-wrapper" aria-hidden="true">
+            <svg className="unique-gmail-m-icon" viewBox="0 0 48 36" fill="none">
+              <rect className="m-envelope" x="2" y="2" width="44" height="32" rx="5" pathLength="100" />
+              <path className="m-stroke" d="M8 30V9l16 13L40 9v21" pathLength="100" />
+              <circle className="m-seal" cx="24" cy="22" r="2.4" />
+            </svg>
+            <span className="gmail-sparkle s1" />
+            <span className="gmail-sparkle s2" />
+            <span className="gmail-sparkle s3" />
+            <span className="gmail-sparkle s4" />
+          </div>
+          <button
+            id="fetch-btn"
+            type="button"
+            onClick={handleEmailReferral}
+            disabled={fetchingEmail || uploading || !masterCv}
+            className="cool-button"
+          >
+            {fetchingEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {emailStatus ?? "Fetch Latest Email Referral & Tailor Resume"}
+          </button>
+          <span role="status" className="helper-text-area">
+            <i className="info-icon not-italic" aria-hidden="true">ℹ️</i>
+            <span>
+              {fetchingEmail ? "Checking Gmail and tailoring your resume. Complete Google sign-in if prompted." : !masterCv ? "Upload your master CV to get started." : <>Connect <span className="highlight-gmail">Gmail</span> on your first use.</>}
+            </span>
+          </span>
+        </div>
+        {emailPreview && <button type="button" onClick={() => setEmailPreview(null)} className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-zinc-300 underline">Close preview</button>}
       </div>
 
       {actionError && (
